@@ -2,7 +2,7 @@ fs = require('fs')
 _ = require('underscore')
 
 # Figure out if the text uses \n (unix) or \r\n (windows) newlines.
-get_newline_value = (sample) ->
+deduce_newline_value = (sample) ->
 	if sample.split('\r\n').length > 1
 		return '\r\n'
 	return '\n'
@@ -11,7 +11,7 @@ get_newline_value = (sample) ->
 # Splits the text into complete lines (must end with newline). 
 # Returns a tuple of [bytes_consumed, [line1, line2, ...]]
 get_lines = (text) ->
-	newline = get_newline_value(text)
+	newline = deduce_newline_value(text)
 	lines = text.split(newline)
 	# Exclude the last item in the array, since it will be an empty or incomplete line.
 	lines = _.initial(lines)
@@ -43,4 +43,6 @@ follow = (filename) ->
 
 	
 # debug
-exports.get_lines = get_lines
+exports.__get_debug_exports = ->
+    deduce_newline_value: deduce_newline_value
+    get_lines: get_lines

@@ -1,14 +1,16 @@
 
 expect = require('chai').expect
+horaa = require('horaa')
 
 
-describe 'index', ->
+describe 'text-file-follower', ->
+
   describe '#load-module', ->
+
     it 'should load when required', ->
       expect(require('../lib/index')).to.be.ok
 
-  follower = require('../lib/index')
-  follower_debug = follower.__get_debug_exports()
+  follower_debug = require('../lib/index').__get_debug_exports()
 
   describe '#deduce_newline_value', ->
 
@@ -100,3 +102,18 @@ describe 'index', ->
       result = follower_debug.get_lines(not_newline_end)
       expect(result).to.eql(['foo\r\nbar\r\n'.length, ['foo', 'bar']])
 
+  describe '#follow', ->
+
+    fsHoraa = horaa('fs')
+    fsHoraa.hijack('statSync', fsMock.statSync)
+    fsHoraa.restore('statSync')
+    fsHoraa.hijack('statSync', fsMock.statSync)
+
+    follower = require('../lib/index')
+
+    it "throw an error when given something that isn't a file", ->
+      fsHoraa.hijack('statSync', () -> return isFile: -> false)
+      expect(follower.follow).to.throw(Error)
+      fsHoraa.restore('statSync')
+
+    

@@ -37,14 +37,14 @@ get_lines = (text) ->
 
 ###
 The emitter that's returned from follow(). It can be used to listen for events,
-and it can also be used to stop the follower.
+and it can also be used to close the follower.
 ###
 class Follower extends events.EventEmitter
   constructor: (@watcher) ->
   
   # Shut down the follower
-  stop: -> 
-    return @watcher.close() 
+  close: -> 
+    @watcher.close()
 
 
 ###
@@ -58,7 +58,7 @@ listener is an optional callback that takes two arguments: `(event, value)`. The
 possible event is `line`, and the value will the new line that has been added to 
 the watched/followed file. 
 Returns an instance of the Follower object, which is an EventEmitter and can be 
-used to listen for the `line` and `error` events. It also has a `stop()` member 
+used to listen for the `line` and `error` events. It also has a `close()` member 
 that ends the following. Emitted events pass the watched filename (and the line,
 for `line` to the bound callback).
 ###
@@ -90,7 +90,7 @@ follow = (filename, options = {}, listener = null) ->
 
   prev_size = stats.size
 
-  # Pass a no-op listener function -- we'll listen on the emit instead
+  # Set up the file watcher
   watcher = watchit(filename, { debounce: true, retain: true, persistent: options.persistent })
 
   # If the file gets newly re-created (e.g., after a log rotate), then we want
@@ -98,10 +98,12 @@ follow = (filename, options = {}, listener = null) ->
   watcher.on('create', -> prev_size = 0)
 
   # Create the Follower object that we'll ultimately return
-  follower = new Follower(  watcher)
+  follower = new Follower(watcher)
   if listener? then follower.addListener('line', listener)
 
-  watcher.on('failure', -> follower.emit('error', filename))
+  watcher.on('failure', -> 
+    console.trace('watcher emitted failure')
+    follower.emit('error', filename))
 
   # Function that gets called when a change is detected in the file.
   onchange = (filename) -> 
@@ -118,6 +120,7 @@ follow = (filename, options = {}, listener = null) ->
     read_stream.on 'data', (new_data) -> 
       accumulated_data += new_data
       [bytes_consumed, lines] = get_lines(accumulated_data)
+      console.log('readstream.on:'+accumulated_data)
 
       # Move our data forward by the number of bytes we've really processed.
       accumulated_data = accumulated_data[bytes_consumed..]
@@ -125,6 +128,7 @@ follow = (filename, options = {}, listener = null) ->
 
       # Tell our listeners about the new lines
       lines.forEach((line) -> follower.emit('line', filename, line))
+      lines.forEach (line) -> console.log('emitted line:' + line)
 
   # Hook up our change handler to the file watcher
   watcher.on('change', onchange)

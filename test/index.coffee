@@ -1,9 +1,21 @@
 
 expect = require('chai').expect
-horaa = require('horaa')
+fs = require('fs')
+_ = require('underscore')
 
+delay = (func) -> setTimeout func, 3000
+
+appendSync = (filename, str) ->
+  len = fs.statSync(filename).size
+  fd = fs.openSync(filename, 'a')
+  fs.writeSync(fd, str, len)
+  fs.closeSync(fd)
 
 describe 'text-file-follower', ->
+
+  before ->
+    try
+      fs.mkdirSync('fixtures')
 
   describe '#load-module', ->
 
@@ -104,9 +116,16 @@ describe 'text-file-follower', ->
 
   describe '#follow', ->
 
-    fsHoraa = horaa('fs')
+    before ->
+      try
+        fs.mkdirSync('fixtures/testdir')
+      fs.writeFileSync('fixtures/a.test')
+    
+    after ->
+      fs.rmdirSync('fixtures/testdir')
+      fs.unlinkSync('fixtures/a.test')
 
-    follower = require('../lib/index')
+    follower = require('../lib')
 
     it "should reject bad arguments", ->
       # no args
@@ -120,15 +139,56 @@ describe 'text-file-follower', ->
       # if two args, second arg is neither an object (options) nor a function (listener)
       expect(-> follower.follow('foobar', 123)).to.throw(TypeError)
 
-    it "should handle the optional arguments correctly", ->
-      # need mocking -- enough to create the follower and then close it
-      #expect(-> follower.follow('foobar', ->)).to.throw(Error)
-      true
-
     it "should throw an error when given something that isn't a file", ->
-      fsHoraa.hijack('statSync', () -> return isFile: -> false)
-      expect(-> follower.follow('foobar', ->)).to.throw(Error)
-      fsHoraa.restore('statSync')
+      expect(-> follower.follow('fixtures/testdir')).to.throw(Error)
 
     it "should throw an error when the file doesn't exist", ->
-      expect(-> follower.follow('foobar', ->)).to.throw(Error)
+      expect(-> follower.follow('foobar')).to.throw(Error)
+
+    it "should start successfully in a simple scenario", ->
+      f = follower.follow('fixtures/a.test')
+      #expect(f).to.be.ok
+      #f.close()
+
+    it "should read lines from a fresh file successfully", (done) ->
+      line_count = 0
+      f = follower.follow('fixtures/a.test')
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+
+      received_line = ''
+      f.on 'line', (filename, line) -> 
+        console.log 'test:online: '+line
+        line_count++
+        expect(filename).to.equal('fixtures/a.test')
+        received_line = line
+
+      delay ->
+        # no newline
+        appendSync('fixtures/a.test', "abc\n")
+        delay ->
+          console.log 'aaa'
+          expect(line_count).to.equal(0)
+
+          expected_line = 'abc'
+          appendSync('fixtures/a.test', '\n')
+          delay ->
+            console.log 'bbb'
+            expect(line_count).to.equal(1)
+            expect(received_line).to.equal('abc')
+
+            expected_line = 'def'
+            appendSync('fixtures/a.test', 'def\n')
+            delay ->
+              console.log 'ccc'
+              expect(line_count).to.equal(2)
+              expect(received_line).to.equal('def')
+
+              appendSync('fixtures/a.test', 'ghi\njkl\n')
+              delay ->
+                expect(line_count).to.equal(4)
+                expect(received_line).to.equal('jkl')
+
+                f.close()
+                done()
+

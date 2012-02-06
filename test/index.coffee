@@ -105,15 +105,30 @@ describe 'text-file-follower', ->
   describe '#follow', ->
 
     fsHoraa = horaa('fs')
-    fsHoraa.hijack('statSync', fsMock.statSync)
-    fsHoraa.restore('statSync')
-    fsHoraa.hijack('statSync', fsMock.statSync)
 
     follower = require('../lib/index')
 
-    it "throw an error when given something that isn't a file", ->
+    it "should reject bad arguments", ->
+      # no args
+      expect(-> follower.follow()).to.throw(TypeError)
+      # filename not a string
+      expect(-> follower.follow(123, {}, ->)).to.throw(TypeError)
+      # options not an object
+      expect(-> follower.follow('foobar', 123, ->)).to.throw(TypeError)
+      # listener not a function
+      expect(-> follower.follow('foobar', {}, 123)).to.throw(TypeError)
+      # if two args, second arg is neither an object (options) nor a function (listener)
+      expect(-> follower.follow('foobar', 123)).to.throw(TypeError)
+
+    it "should handle the optional arguments correctly", ->
+      # need mocking -- enough to create the follower and then close it
+      #expect(-> follower.follow('foobar', ->)).to.throw(Error)
+      true
+
+    it "should throw an error when given something that isn't a file", ->
       fsHoraa.hijack('statSync', () -> return isFile: -> false)
-      expect(follower.follow).to.throw(Error)
+      expect(-> follower.follow('foobar', ->)).to.throw(Error)
       fsHoraa.restore('statSync')
 
-    
+    it "should throw an error when the file doesn't exist", ->
+      expect(-> follower.follow('foobar', ->)).to.throw(Error)

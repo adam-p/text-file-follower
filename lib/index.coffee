@@ -1,4 +1,7 @@
+events = require('events')
+util = require('util')
 fs = require('fs')
+watchit = require('watchit')
 _ = require('underscore')
 
 
@@ -6,7 +9,7 @@ _ = require('underscore')
 Figure out if the text uses \n (unix) or \r\n (windows) newlines.
 ###
 deduce_newline_value = (sample) ->
-  if sample.split('\r\n').length > 1
+  if sample.indexOf('\r\n') >= 0
     return '\r\n'
   return '\n'
 
@@ -33,27 +36,100 @@ get_lines = (text) ->
 
 
 ###
-Watch for changes on `filename`
+The emitter that's returned from follow(). It can be used to listen for events,
+and it can also be used to stop the follower.
 ###
-follow = (filename, callback, catchup=false, options=null) ->
+class Follower extends events.EventEmitter
+  constructor: (@watcher) ->
+  
+  # Shut down the follower
+  stop: -> 
+    return @watcher.close() 
+
+
+###
+Watch for changes on `filename`.
+`options` is an optional object that looks like the following:
+  {
+    persistent: boolean, (default: true; ref: http://nodejs.org/docs/latest/api/fs.html#fs.watch)
+    catchup: boolean (default: false; if true, all pre-existing lines will also be output )
+  }
+listener is an optional callback that takes two arguments: `(event, value)`. The 
+possible event is `line`, and the value will the new line that has been added to 
+the watched/followed file. 
+Returns an instance of the Follower object, which is an EventEmitter and can be 
+used to listen for the `line` and `error` events. It also has a `stop()` member 
+that ends the following. Emitted events pass the watched filename (and the line,
+for `line` to the bound callback).
+###
+
+follow = (filename, options = {}, listener = null) ->
+
+  # Check arguments and sort out the optional ones.
+
+  if not listener? and typeof(options) == 'function'
+    listener = options
+    options = {}
+
+  if typeof(filename) != 'string'
+    throw TypeError('`filename` must be a string')
+
+  if typeof(options) != 'object'
+    throw TypeError('if supplied, `options` must be an object')
+
+  if listener? and typeof(listener) != 'function'
+    throw TypeError('if supplied, `listener` must be a function')
+
+  # Fill in options defaults
+  options = _.defaults(options, { persistent: true, catchup: false })
 
   stats = fs.statSync(filename)
 
   if not stats.isFile()
-    throw new Error('`filename` is not a file')
-  console.log('passed isFile test')
-  prev_size = 0
+    throw new Error("#{ filename } is not a file")
 
-  fs.stat(filename, (err, stats) ->
-    if err
-      throw(err)
-      size = stats.size
-    )
+  prev_size = stats.size
 
-  watcher = fs.watch(filename, (event) -> 
-    console.log(event))
+  # Pass a no-op listener function -- we'll listen on the emit instead
+  watcher = watchit(filename, { debounce: true, retain: true, persistent: options.persistent })
 
-  return stop: ->  # will call to FSWatcher.close()
+  # If the file gets newly re-created (e.g., after a log rotate), then we want
+  # to start watching it from the beginning.
+  watcher.on('create', -> prev_size = 0)
+
+  # Create the Follower object that we'll ultimately return
+  follower = new Follower(  watcher)
+  if listener? then follower.addListener('line', listener)
+
+  watcher.on('failure', -> follower.emit('error', filename))
+
+  # Function that gets called when a change is detected in the file.
+  onchange = (filename) -> 
+
+    # Get the new filesize and abort if it hasn't grown
+    stats = fs.statSync(filename)
+    return if stats.size <= prev_size
+
+    # Not every chunk of data we get will have complete lines, so we'll often
+    # have to keep a piece of the previous chunk to process the next.
+    accumulated_data = ''
+
+    read_stream = fs.createReadStream(filename, { encoding: 'utf8', start: prev_size })
+    read_stream.on 'data', (new_data) -> 
+      accumulated_data += new_data
+      [bytes_consumed, lines] = get_lines(accumulated_data)
+
+      # Move our data forward by the number of bytes we've really processed.
+      accumulated_data = accumulated_data[bytes_consumed..]
+      prev_size += bytes_consumed
+
+      # Tell our listeners about the new lines
+      lines.forEach((line) -> follower.emit('line', filename, line))
+
+  # Hook up our change handler to the file watcher
+  watcher.on('change', onchange)
+
+  return follower
 
 
 exports.follow = follow

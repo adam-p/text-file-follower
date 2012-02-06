@@ -47,12 +47,14 @@ class Follower extends events.EventEmitter
     @watcher.close()
 
 
+default_options = 
+  persistent: true
+
 ###
 Watch for changes on `filename`.
 `options` is an optional object that looks like the following:
   {
     persistent: boolean, (default: true; ref: http://nodejs.org/docs/latest/api/fs.html#fs.watch)
-    catchup: boolean (default: false; if true, all pre-existing lines will also be output )
   }
 listener is an optional callback that takes two arguments: `(event, value)`. The 
 possible event is `line`, and the value will the new line that has been added to 
@@ -81,7 +83,7 @@ follow = (filename, options = {}, listener = null) ->
     throw TypeError('if supplied, `listener` must be a function')
 
   # Fill in options defaults
-  options = _.defaults(options, { persistent: true, catchup: false })
+  options = _.defaults(options, default_options)
 
   stats = fs.statSync(filename)
 
@@ -89,17 +91,22 @@ follow = (filename, options = {}, listener = null) ->
     throw new Error("#{ filename } is not a file")
 
   prev_size = stats.size
+  prev_mtime = stats.mtime
 
   # Set up the file watcher
-  watcher = watchit(filename, { debounce: true, retain: true, persistent: options.persistent })
+  watcher = watchit(filename, { debounce: false, retain: true, persistent: options.persistent })
 
   # If the file gets newly re-created (e.g., after a log rotate), then we want
   # to start watching it from the beginning.
   watcher.on('create', -> prev_size = 0)
+  watcher.on('unlink', -> prev_size = 0)
 
   # Create the Follower object that we'll ultimately return
   follower = new Follower(watcher)
   if listener? then follower.addListener('line', listener)
+
+  watcher.on 'success', -> 
+    follower.emit('success', filename)
 
   watcher.on('failure', -> 
     console.trace('watcher emitted failure')
@@ -111,6 +118,8 @@ follow = (filename, options = {}, listener = null) ->
     # Get the new filesize and abort if it hasn't grown
     stats = fs.statSync(filename)
     return if stats.size <= prev_size
+    return if stats.mtime == prev_mtime
+    prev_mtime = stats.mtime
 
     # Not every chunk of data we get will have complete lines, so we'll often
     # have to keep a piece of the previous chunk to process the next.
@@ -120,7 +129,6 @@ follow = (filename, options = {}, listener = null) ->
     read_stream.on 'data', (new_data) -> 
       accumulated_data += new_data
       [bytes_consumed, lines] = get_lines(accumulated_data)
-      console.log('readstream.on:'+accumulated_data)
 
       # Move our data forward by the number of bytes we've really processed.
       accumulated_data = accumulated_data[bytes_consumed..]
@@ -128,7 +136,6 @@ follow = (filename, options = {}, listener = null) ->
 
       # Tell our listeners about the new lines
       lines.forEach((line) -> follower.emit('line', filename, line))
-      lines.forEach (line) -> console.log('emitted line:' + line)
 
   # Hook up our change handler to the file watcher
   watcher.on('change', onchange)

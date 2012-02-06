@@ -3,7 +3,7 @@ expect = require('chai').expect
 fs = require('fs')
 _ = require('underscore')
 
-delay = (func) -> setTimeout func, 3000
+delay = (func) -> setTimeout func, 100
 
 appendSync = (filename, str) ->
   len = fs.statSync(filename).size
@@ -20,9 +20,9 @@ describe 'text-file-follower', ->
   describe '#load-module', ->
 
     it 'should load when required', ->
-      expect(require('../lib/index')).to.be.ok
+      expect(require('../lib')).to.be.ok
 
-  follower_debug = require('../lib/index').__get_debug_exports()
+  follower_debug = require('../lib').__get_debug_exports()
 
   describe '#deduce_newline_value', ->
 
@@ -119,11 +119,10 @@ describe 'text-file-follower', ->
     before ->
       try
         fs.mkdirSync('fixtures/testdir')
-      fs.writeFileSync('fixtures/a.test')
+      fs.writeFileSync('fixtures/a.test', '')
+      fs.writeFileSync('fixtures/b.test', '')
     
     after ->
-      fs.rmdirSync('fixtures/testdir')
-      fs.unlinkSync('fixtures/a.test')
 
     follower = require('../lib')
 
@@ -147,48 +146,48 @@ describe 'text-file-follower', ->
 
     it "should start successfully in a simple scenario", ->
       f = follower.follow('fixtures/a.test')
-      #expect(f).to.be.ok
-      #f.close()
+      expect(f).to.be.ok
+      f.close()
 
     it "should read lines from a fresh file successfully", (done) ->
       line_count = 0
+      next = null
+
       f = follower.follow('fixtures/a.test')
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
       received_line = ''
       f.on 'line', (filename, line) -> 
-        console.log 'test:online: '+line
         line_count++
-        expect(filename).to.equal('fixtures/a.test')
+        expect(filename).to.equal('fixtures/a.test')        
         received_line = line
+        next()
 
       delay ->
         # no newline
-        appendSync('fixtures/a.test', "abc\n")
-        delay ->
-          console.log 'aaa'
+        appendSync('fixtures/a.test', 'abc')
+        _.defer ->
           expect(line_count).to.equal(0)
 
-          expected_line = 'abc'
           appendSync('fixtures/a.test', '\n')
-          delay ->
-            console.log 'bbb'
+          next = -> 
             expect(line_count).to.equal(1)
             expect(received_line).to.equal('abc')
 
-            expected_line = 'def'
             appendSync('fixtures/a.test', 'def\n')
-            delay ->
-              console.log 'ccc'
+            next = -> 
               expect(line_count).to.equal(2)
               expect(received_line).to.equal('def')
 
               appendSync('fixtures/a.test', 'ghi\njkl\n')
-              delay ->
-                expect(line_count).to.equal(4)
-                expect(received_line).to.equal('jkl')
+              next = -> 
+                expect(line_count).to.equal(3)
+                expect(received_line).to.equal('ghi')
+                next = -> 
+                  expect(line_count).to.equal(4)
+                  expect(received_line).to.equal('jkl')
 
-                f.close()
-                done()
+                  f.close()
+                  done()
 

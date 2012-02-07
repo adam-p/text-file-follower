@@ -109,7 +109,6 @@ follow = (filename, options = {}, listener = null) ->
     follower.emit('success', filename)
 
   watcher.on('failure', -> 
-    console.trace('watcher emitted failure')
     follower.emit('error', filename))
 
   # Function that gets called when a change is detected in the file.

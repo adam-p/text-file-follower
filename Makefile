@@ -1,5 +1,5 @@
 
 test:
-	mocha --require chai --reporter list test/*.coffee
+	mocha --timeout 10000 --require chai --reporter list test/*.coffee
 
 .PHONY: test

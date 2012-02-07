@@ -3,7 +3,7 @@ expect = require('chai').expect
 fs = require('fs')
 _ = require('underscore')
 
-delay = (func) -> setTimeout func, 100
+delay = (func) -> setTimeout func, 1100
 
 appendSync = (filename, str) ->
   len = fs.statSync(filename).size
@@ -144,10 +144,11 @@ describe 'text-file-follower', ->
     it "should throw an error when the file doesn't exist", ->
       expect(-> follower.follow('foobar')).to.throw(Error)
 
-    it "should start successfully in a simple scenario", ->
+    it "should start successfully in a simple scenario", (done) ->
       f = follower.follow('fixtures/a.test')
       expect(f).to.be.ok
       f.close()
+      done()
 
     it "should read lines from a fresh file successfully", (done) ->
       line_count = 0
@@ -157,37 +158,43 @@ describe 'text-file-follower', ->
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
-      received_line = ''
+      received_lines = []
       f.on 'line', (filename, line) -> 
         line_count++
-        expect(filename).to.equal('fixtures/a.test')        
-        received_line = line
-        next()
+        expect(filename).to.equal('fixtures/a.test')
+        received_lines.push(line)
+        delay next
 
-      delay ->
+      _.defer ->
         # no newline
         appendSync('fixtures/a.test', 'abc')
-        _.defer ->
+        delay ->
           expect(line_count).to.equal(0)
 
           appendSync('fixtures/a.test', '\n')
           next = -> 
             expect(line_count).to.equal(1)
-            expect(received_line).to.equal('abc')
+            expect(received_lines.shift()).to.equal('abc')
 
             appendSync('fixtures/a.test', 'def\n')
             next = -> 
               expect(line_count).to.equal(2)
-              expect(received_line).to.equal('def')
+              expect(received_lines.shift()).to.equal('def')
 
+              call_count = 0
               appendSync('fixtures/a.test', 'ghi\njkl\n')
               next = -> 
-                expect(line_count).to.equal(3)
-                expect(received_line).to.equal('ghi')
-                next = -> 
-                  expect(line_count).to.equal(4)
-                  expect(received_line).to.equal('jkl')
+                # This will get called twice.
+                if call_count == 0
+                  expect(received_lines.shift()).to.equal('ghi')
+                  call_count = 1
+                else if call_count == 1
+                  expect(received_lines.shift()).to.equal('jkl')
 
+                  # Finished
                   f.close()
                   done()
+                else
+                  throw Error('bad line_count')
+
 

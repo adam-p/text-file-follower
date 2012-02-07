@@ -115,10 +115,12 @@ follow = (filename, options = {}, listener = null) ->
   # Function that gets called when a change is detected in the file.
   onchange = (filename) -> 
 
-    # Get the new filesize and abort if it hasn't grown
+    # Get the new filesize and abort if it hasn't grown or gotten newer
     stats = fs.statSync(filename)
-    return if stats.size <= prev_size
-    return if stats.mtime == prev_mtime
+
+    if stats.size <= prev_size then return
+    if stats.mtime.getTime() == prev_mtime.getTime() then return
+
     prev_mtime = stats.mtime
 
     # Not every chunk of data we get will have complete lines, so we'll often

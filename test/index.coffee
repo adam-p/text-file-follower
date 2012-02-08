@@ -3,7 +3,7 @@ expect = require('chai').expect
 fs = require('fs')
 _ = require('underscore')
 
-delay = (func) -> setTimeout func, 1100
+delay = _.defer #(func) -> setTimeout func, 100
 
 appendSync = (filename, str) ->
   len = fs.statSync(filename).size
@@ -120,10 +120,11 @@ describe 'text-file-follower', ->
       try
         fs.mkdirSync('fixtures/testdir')
       fs.writeFileSync('fixtures/a.test', '')
-      fs.writeFileSync('fixtures/b.test', '')
     
-    after ->
-
+    beforeEach ->
+      # Make it zero-size again
+      fs.writeFileSync('fixtures/a.test', '')
+    
     follower = require('../lib')
 
     it "should reject bad arguments", ->
@@ -150,7 +151,7 @@ describe 'text-file-follower', ->
       f.close()
       done()
 
-    it "should read lines from a fresh file successfully", (done) ->
+    it "should read lines from a fresh file successfully, using the emitter", (done) ->
       line_count = 0
       next = null
 
@@ -197,4 +198,101 @@ describe 'text-file-follower', ->
                 else
                   throw Error('bad line_count')
 
+    it "should read lines from a fresh file successfully, using the listener callback", (done) ->
+      line_count = 0
+      next = null
+      received_lines = []
 
+      listener = (filename, line) -> 
+        line_count++
+        expect(filename).to.equal('fixtures/a.test')
+        received_lines.push(line)
+        delay next
+
+      f = follower.follow('fixtures/a.test', listener)
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+
+
+      _.defer ->
+        appendSync('fixtures/a.test', 'abc\n')
+        next = -> 
+          expect(line_count).to.equal(1)
+          expect(received_lines.shift()).to.equal('abc')
+
+          appendSync('fixtures/a.test', 'def\n')
+          next = -> 
+            expect(line_count).to.equal(2)
+            expect(received_lines.shift()).to.equal('def')
+
+            f.close()
+            done()
+
+    it "should read lines from the end of a non-empty file", (done) ->
+      line_count = 0
+      next = null
+      received_lines = []
+
+      listener = (filename, line) -> 
+        line_count++
+        expect(filename).to.equal('fixtures/a.test')
+        received_lines.push(line)
+        delay next
+
+      appendSync('fixtures/a.test', 'will not\nget read\n')
+
+      f = follower.follow('fixtures/a.test', listener)
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+
+      _.defer ->
+        appendSync('fixtures/a.test', 'abc\n')
+        next = -> 
+          expect(line_count).to.equal(1)
+          expect(received_lines.shift()).to.equal('abc')
+
+          appendSync('fixtures/a.test', 'def\n')
+          next = -> 
+            expect(line_count).to.equal(2)
+            expect(received_lines.shift()).to.equal('def')
+
+            f.close()
+            done()
+
+    it "should successfully close and re-open a follower", (done) ->
+      line_count = 0
+      next = null
+
+      listener = (filename, line) -> 
+        line_count++
+        expect(filename).to.equal('fixtures/a.test')
+        received_lines.push(line)
+        delay next
+
+      f = follower.follow('fixtures/a.test', listener)
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+
+      received_lines = []
+      _.defer ->
+        appendSync('fixtures/a.test', 'abc\n')
+        next = -> 
+          expect(line_count).to.equal(1)
+          expect(received_lines.shift()).to.equal('abc')
+
+          # Close
+          f.close()
+
+          # Re-open
+          line_count = 0
+          f = follower.follow('fixtures/a.test', listener)
+          expect(f).to.be.ok
+          f.on 'error', -> throw new Error()
+
+          appendSync('fixtures/a.test', 'def\n')
+          next = -> 
+            expect(line_count).to.equal(1)
+            expect(received_lines.shift()).to.equal('def')
+
+            f.close()
+            done()

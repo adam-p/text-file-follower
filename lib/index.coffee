@@ -21,7 +21,7 @@ get_lines = (text) ->
   newline = deduce_newline_value(text)
   lines = text.split(newline)
   # Exclude the last item in the array, since it will be an empty or incomplete line.
-  lines = _.initial(lines)
+  lines.pop()
 
   if lines.length == 0
     return [0, []]
@@ -118,7 +118,10 @@ follow = (filename, options = {}, listener = null) ->
     stats = fs.statSync(filename)
 
     if stats.size <= prev_size then return
-    if stats.mtime.getTime() == prev_mtime.getTime() then return
+
+    # Aborting if the mtime is the same is a pretty ham-fisted way of dealing
+    # with duplicate notifications. We'll disable it for now.
+    #if stats.mtime.getTime() == prev_mtime.getTime() then return
 
     prev_mtime = stats.mtime
 

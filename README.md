@@ -7,8 +7,6 @@
 - Multiple live watchers on the same file seems to be a problem (issue with watchit?)
   - Add a test
 - Add 'catchup' (process whole file first) feature.
-- Probably switch to basic fs.watch rather than watchit.
-  - Not sure what benefit it confers if not using debounce.
 - Run through linter.
 - Properly handle pre-existing partial line when watcher first starts
   - Or state explicitly that it won't be handled

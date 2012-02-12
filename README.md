@@ -6,8 +6,6 @@
 
 - Add 'catchup' (process whole file first) feature.
 
-- Run through linter.
-
 - Properly handle pre-existing partial line when watcher first starts
   - Or state explicitly that it won't be handled.
 

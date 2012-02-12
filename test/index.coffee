@@ -221,7 +221,6 @@ describe 'text-file-follower', ->
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
-
       _.defer ->
         appendSync('fixtures/a.test', 'abc\n')
         next = -> 
@@ -310,6 +309,55 @@ describe 'text-file-follower', ->
 
       f2_close_deferred = Q.defer()
       f2.on 'close', f2_close_deferred.resolve
+
+      Q.all([f1_close_deferred, f2_close_deferred]).then ->
+        done()
+
+    it "should be able to put two watchers on the same file", (done) ->
+      line_count = 0
+
+      curr_line = 'foobar'
+      curr_filename = 'fixtures/a.test'
+
+      f1 = follower.follow(curr_filename)
+      f2 = follower.follow(curr_filename)
+
+      f1.on 'error', -> throw new Error()
+      f2.on 'error', -> throw new Error()
+
+      f1_line_deferred = Q.defer()
+      f1.on 'line', (filename, line) ->
+        expect(filename).to.equal(curr_filename)
+        expect(line).to.equal(curr_line)
+        line_count++
+        f1_line_deferred.resolve(line)
+
+      f2_line_deferred = Q.defer()
+      f2.on 'line', (filename, line) ->
+        expect(filename).to.equal(curr_filename)
+        expect(line).to.equal(curr_line)
+        line_count++
+        f2_line_deferred.resolve(line)
+
+      f1_success_deferred = Q.defer()
+      f1.on 'success', f1_success_deferred.resolve
+
+      f2_success_deferred = Q.defer()
+      f2.on 'success', f2_success_deferred.resolve
+
+      Q.all([f1_success_deferred, f2_success_deferred]).then ->
+        appendSync(curr_filename, curr_line+'\n')
+
+      f1_close_deferred = Q.defer()
+      f1.on 'close', f1_close_deferred.resolve
+
+      f2_close_deferred = Q.defer()
+      f2.on 'close', f2_close_deferred.resolve
+
+      Q.all([f1_line_deferred, f2_line_deferred]).then ->
+        expect(line_count).to.equal(2)
+        f1.close()
+        f2.close()
 
       Q.all([f1_close_deferred, f2_close_deferred]).then ->
         done()

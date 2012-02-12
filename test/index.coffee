@@ -133,36 +133,36 @@ describe 'text-file-follower', ->
       fs.writeFileSync('fixtures/b.test', '')
       fs.writeFileSync('fixtures/c.test', '')
     
-    follower = require('../lib')
+    follow = require('../lib')
 
     it "should reject bad arguments", ->
       # no args
-      expect(-> follower.follow()).to.throw(TypeError)
+      expect(-> follow()).to.throw(TypeError)
       # filename not a string
-      expect(-> follower.follow(123, {}, ->)).to.throw(TypeError)
+      expect(-> follow(123, {}, ->)).to.throw(TypeError)
       # options not an object
-      expect(-> follower.follow('foobar', 123, ->)).to.throw(TypeError)
+      expect(-> follow('foobar', 123, ->)).to.throw(TypeError)
       # listener not a function
-      expect(-> follower.follow('foobar', {}, 123)).to.throw(TypeError)
+      expect(-> follow('foobar', {}, 123)).to.throw(TypeError)
       # if two args, second arg is neither an object (options) nor a function (listener)
-      expect(-> follower.follow('foobar', 123)).to.throw(TypeError)
+      expect(-> follow('foobar', 123)).to.throw(TypeError)
 
     it "should emit an error when given something that isn't a file", (done) ->
-      f = follower.follow('fixtures/testdir')
+      f = follow('fixtures/testdir')
       f.on 'error', (filename, error) ->
         expect(error).to.equal('not a file')
         f.close() 
         f.on 'close', -> done()
 
     it "should not throw an error when the file doesn't exist", (done) ->
-      f = follower.follow('foobar')
+      f = follow('foobar')
       # Should not be a success event
       f.on 'success', -> throw new Error('success is bad here')
       f.close()
       f.on 'close', -> done()
 
     it "should start successfully in a simple scenario", (done) ->
-      f = follower.follow('fixtures/a.test')
+      f = follow('fixtures/a.test')
       expect(f).to.be.ok
       f.close()
       done()
@@ -172,7 +172,7 @@ describe 'text-file-follower', ->
       next = null
       received_lines = []
 
-      f = follower.follow('fixtures/a.test')
+      f = follow('fixtures/a.test')
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
@@ -233,7 +233,7 @@ describe 'text-file-follower', ->
 
       curr_filename = 'fixtures/a.test'
 
-      f = follower.follow('fixtures/a.test', listener)
+      f = follow('fixtures/a.test', listener)
       expect(f).to.be.ok
 
       expected_event = 'success'
@@ -275,7 +275,7 @@ describe 'text-file-follower', ->
 
       curr_filename = 'fixtures/a.test'
 
-      f = follower.follow('fixtures/a.test')
+      f = follow('fixtures/a.test')
       expect(f).to.be.ok
 
       f. on 'all', listener
@@ -313,7 +313,7 @@ describe 'text-file-follower', ->
 
       appendSync('fixtures/a.test', 'will not\nget read\n')
 
-      f = follower.follow('fixtures/a.test')
+      f = follow('fixtures/a.test')
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
@@ -338,7 +338,7 @@ describe 'text-file-follower', ->
 
       f1_line = 'f1'
       f1_filename = 'fixtures/a.test'
-      f1 = follower.follow(f1_filename)
+      f1 = follow(f1_filename)
       f1.on 'error', -> throw new Error()
 
       f1_line_deferred = Q.defer()
@@ -350,7 +350,7 @@ describe 'text-file-follower', ->
 
       f2_line = 'f2'
       f2_filename = 'fixtures/b.test'
-      f2 = follower.follow(f2_filename)
+      f2 = follow(f2_filename)
       f2.on 'error', -> throw new Error()
 
       f2_line_deferred = Q.defer()
@@ -386,8 +386,8 @@ describe 'text-file-follower', ->
       curr_line = 'foobar'
       curr_filename = 'fixtures/a.test'
 
-      f1 = follower.follow(curr_filename)
-      f2 = follower.follow(curr_filename)
+      f1 = follow(curr_filename)
+      f2 = follow(curr_filename)
 
       f1.on 'error', -> throw new Error()
       f2.on 'error', -> throw new Error()
@@ -442,7 +442,7 @@ describe 'text-file-follower', ->
         _.defer next
 
       curr_filename = 'fixtures/a.test'
-      f = follower.follow(curr_filename)
+      f = follow(curr_filename)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
       f.on 'line', listener
@@ -461,7 +461,7 @@ describe 'text-file-follower', ->
           close_deferred.promise.then ->
             # Re-open
             line_count = 0
-            f = follower.follow(curr_filename)
+            f = follow(curr_filename)
             expect(f).to.be.ok
 
             f.on 'error', -> throw new Error()
@@ -478,7 +478,7 @@ describe 'text-file-follower', ->
 
     it "should asynchronously emit a close event", (done) ->
       curr_filename = 'fixtures/a.test'
-      f = follower.follow(curr_filename)
+      f = follow(curr_filename)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
@@ -510,7 +510,7 @@ describe 'text-file-follower', ->
         _.defer next
 
       curr_filename = 'fixtures/a.test'
-      f = follower.follow(curr_filename)
+      f = follow(curr_filename)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
       f.on 'line', listener
@@ -572,7 +572,7 @@ describe 'text-file-follower', ->
       # Delete the file before following
       fs.unlink curr_filename, ->
 
-        f = follower.follow(curr_filename)
+        f = follow(curr_filename)
         expect(f).to.be.ok
   
         f.on 'all', listener

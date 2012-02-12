@@ -228,10 +228,10 @@ get_lines = (text) ->
   return [bytes_consumed, lines]
 
 
-
-exports.follow = follow
+# The main export is the sole real function
+module.exports = follow
   
-# debug
-exports.__get_debug_exports = ->
+# Also export the helpers for debug-testing
+module.exports.__get_debug_exports = ->
     deduce_newline_value: deduce_newline_value
     get_lines: get_lines

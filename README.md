@@ -13,6 +13,8 @@
 
 - Maybe create a Cakefile (steal watch it's)
 
+- Turn into real Node (npm) module.
+
 - Make encoding an option?
 
 # Observations

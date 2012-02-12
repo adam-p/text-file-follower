@@ -172,12 +172,12 @@ describe 'text-file-follower', ->
         line_count++
         expect(filename).to.equal('fixtures/a.test')
         received_lines.push(line)
-        delay next
+        _.defer next
 
-      _.defer ->
+      f.on 'success', ->
         # no newline
         appendSync('fixtures/a.test', 'abc')
-        delay ->
+        long_delay ->
           expect(line_count).to.equal(0)
 
           appendSync('fixtures/a.test', '\n')
@@ -201,8 +201,8 @@ describe 'text-file-follower', ->
                   expect(received_lines.shift()).to.equal('jkl')
 
                   # Finished
+                  f.on 'close', -> done()
                   f.close()
-                  done()
                 else
                   throw Error('bad line_count')
 
@@ -215,13 +215,13 @@ describe 'text-file-follower', ->
         line_count++
         expect(filename).to.equal('fixtures/a.test')
         received_lines.push(line)
-        delay next
+        _.defer next
 
       f = follower.follow('fixtures/a.test', listener)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
-      _.defer ->
+      f.on 'success', ->
         appendSync('fixtures/a.test', 'abc\n')
         next = -> 
           expect(line_count).to.equal(1)
@@ -232,8 +232,8 @@ describe 'text-file-follower', ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
 
+            f.on 'close', -> done()
             f.close()
-            done()
 
     it "should read lines from the end of a non-empty file", (done) ->
       line_count = 0
@@ -244,7 +244,7 @@ describe 'text-file-follower', ->
         line_count++
         expect(filename).to.equal('fixtures/a.test')
         received_lines.push(line)
-        delay next
+        _.defer next
 
       appendSync('fixtures/a.test', 'will not\nget read\n')
 
@@ -252,7 +252,7 @@ describe 'text-file-follower', ->
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
-      _.defer ->
+      f.on 'success', ->
         appendSync('fixtures/a.test', 'abc\n')
         next = -> 
           expect(line_count).to.equal(1)
@@ -263,8 +263,8 @@ describe 'text-file-follower', ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
 
+            f.on 'close', -> done()
             f.close()
-            done()
 
     it "should successfully work with two different files at once", (done) ->
       line_count = 0
@@ -279,7 +279,7 @@ describe 'text-file-follower', ->
         expect(filename).to.equal(f1_filename)
         expect(line).to.equal(f1_line)
         line_count++
-        f1_line_deferred.resolve(line)
+        f1_line_deferred.resolve()
 
       f2_line = 'f2'
       f2_filename = 'fixtures/b.test'
@@ -291,7 +291,7 @@ describe 'text-file-follower', ->
         expect(filename).to.equal(f2_filename)
         expect(line).to.equal(f2_line)
         line_count++
-        f2_line_deferred.resolve(line)
+        f2_line_deferred.resolve()
 
       f1.on 'success', ->
         appendSync(f1_filename, f1_line+'\n')
@@ -371,7 +371,7 @@ describe 'text-file-follower', ->
         line_count++
         expect(filename).to.equal(curr_filename)
         received_lines.push(line)
-        delay next
+        _.defer next
 
       curr_filename = 'fixtures/c.test'
       f = follower.follow(curr_filename)

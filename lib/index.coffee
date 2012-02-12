@@ -49,7 +49,8 @@ The 'all' event can also be listened for. Its callback will be passed
 `(event, filename, value)` (exactly like the listener callback passed into `follow`).
 
 The possible events are:
-  * `'success'`: The follower started up successfully. `value` is undefined.
+  * `'success'`: The follower started up successfully. Will be delayed if file 
+                 does not exist. `value` is undefined.
   * `'line'`: `value` will be the new line that has been added to the file.
   * `'close'`: The follower has been closed. `value` is undefined.
   * `'error'`: An error has occurred. `value` will contain error information.
@@ -77,16 +78,11 @@ follow = (filename, options = {}, listener = null) ->
   # Fill in options defaults
   options = _.defaults(options, default_options)
 
-  stats = fs.statSync(filename)
-
-  if not stats.isFile()
-    throw new Error("#{ filename } is not a file")
-
-  prev_size = stats.size
-  prev_mtime = stats.mtime
-
   # Set up the file watcher
   watcher = watchit(filename, { debounce: false, retain: true, persistent: options.persistent })
+
+  prev_size = 0
+  prev_mtime = null
 
   # If the file gets newly re-created (e.g., after a log rotate), then we want
   # to start watching it from the beginning.
@@ -94,8 +90,21 @@ follow = (filename, options = {}, listener = null) ->
   watcher.on('unlink', -> prev_size = 0)
 
   # Create the Follower object that we'll ultimately return
-  follower = new Follower(watcher)
+  follower = new Follower(watcher, filename)
   if listener? then follower.addListener('all', listener)
+
+  fs.stat filename, (error, stats) ->
+    if error?
+      # Just return on file-not-found
+      if error.code != 'ENOENT'
+        follower.emit('error', filename, error)
+      return 
+
+    if not stats.isFile()
+      follower.emit('error', filename, "not a file")
+
+    prev_size = stats.size
+    prev_mtime = stats.mtime
 
   # watchit will emit success every time the file is unlinked and recreated, but
   # we only want to emit it once.
@@ -174,7 +183,7 @@ The emitter that's returned from follow(). It can be used to listen for events,
 and it can also be used to close the follower.
 ###
 class Follower extends events.EventEmitter
-  constructor: (@watcher) ->
+  constructor: (@watcher, @filename) ->
 
   emit: (event, filename, etc...) ->
     return if event is 'newListener'
@@ -183,7 +192,11 @@ class Follower extends events.EventEmitter
   
   # Shut down the follower
   close: -> 
-    @watcher.close()
+    if @watcher? 
+      @watcher.close()
+    else
+      _.defer -> emit 'close', @filename
+
 
 ###
 Figure out if the text uses \n (unix) or \r\n (windows) newlines.

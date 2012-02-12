@@ -2,17 +2,6 @@
 
 # TODO
 
-- Switch from `fs.statSync` to `fs.stat`. 
-  - Maybe also start using the Q module.
-
-- Handle all exceptions. For example, in the `onchange` handler, if the file 
-  disappears between the `fs.statSync` check and the `fs.createReadStream` call 
-  (or between when watchit emits `'change'` and the `fs.statSync` call), an 
-  `ENOENT` exception will occur. This will probably bring down the process.
-  - If we assume that watchit's `retain` works, then the correct behaviour is 
-    probably to just quietly swallow the error and return. Operations will 
-    continue when the file is re-created. 
-
 - Move .coffee to /src and add make target that compiles to /lib. 
 
 - Add 'catchup' (process whole file first) feature.

@@ -136,7 +136,15 @@ follow = (filename, options = {}, listener = null) ->
     follower.emit('error', filename))
 
   watcher.on('close', -> 
-    follower.emit('close', filename))
+    # It doesn't feel right to me that watchit emits the 'close' event synchronously
+    # with close() being called. It means that code that looks like this doesn't
+    # work (and I think it should):
+    #   mywatcher.close()
+    #   mywatcher.on('close', -> do something)
+    # I'm not certain my feeling is right, but I see no harm in making it behave
+    # this way.
+    # So I'm going to make the propagation of it asynchronous:
+    _.defer -> follower.emit('close', filename))
 
   # Function that gets called when a change is detected in the file.
   onchange = (filename) -> 

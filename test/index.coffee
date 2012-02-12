@@ -373,7 +373,7 @@ describe 'text-file-follower', ->
         received_lines.push(line)
         _.defer next
 
-      curr_filename = 'fixtures/c.test'
+      curr_filename = 'fixtures/a.test'
       f = follower.follow(curr_filename)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
@@ -406,6 +406,20 @@ describe 'text-file-follower', ->
                 expect(line_count).to.equal(1)
                 expect(received_lines.shift()).to.equal('def')
 
-                f.on 'close', -> done()
                 f.close()
-        
+                f.on 'close', -> done()
+
+    it "should asynchronously emit a close event", (done) ->
+      curr_filename = 'fixtures/a.test'
+      f = follower.follow(curr_filename)
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+
+      test = false
+      f.on 'close', -> 
+        # This should only get hit after the below code completes.
+        expect(test).to.be.true
+        done()
+
+      f.close()
+      test = true

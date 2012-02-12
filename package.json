@@ -1,0 +1,31 @@
+{
+  "author": "Adam Pritchard (pritchard.adam@gmail.com)",
+  "name": "text-file-follower",
+  "description": "Like `tail -f`: Get each new line from a text file as they appear.",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=0.6.10"
+  },
+  "homepage": "https://github.com/adam-p/text-file-follower",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/adam-p/text-file-follower.git"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "watchit": "0.x.x",
+    "underscore": "1.x.x"
+  },
+  "devDependencies": {
+    "coffee-script": "1.x.x",
+    "q": "0.x.x",
+    "mocha": "0.x.x",
+    "chai": "0.x.x"
+  },
+  "licenses": [
+    {
+      "type": "MIT",
+      "url": "http://adampritchard.mit-license.org/",
+    }
+  ]
+}

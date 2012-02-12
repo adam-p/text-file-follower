@@ -137,7 +137,7 @@ follow = (filename, options = {}, listener = null) ->
     success_emitted = true
 
   watcher.on('failure', -> 
-    follower.emit('error', filename))
+    follower.emit('error', filename, 'watchit failure'))
 
   watcher.on('close', -> 
     # It doesn't feel right to me that watchit emits the 'close' event synchronously
@@ -154,31 +154,42 @@ follow = (filename, options = {}, listener = null) ->
   onchange = (filename) -> 
 
     # Get the new filesize and abort if it hasn't grown or gotten newer
-    stats = fs.statSync(filename)
+    fs.stat filename, (error, stats) ->
+      if error?
+        # Just return on file-not-found
+        if error.code != 'ENOENT'
+          follower.emit('error', filename, error)
+        return 
 
-    if stats.size <= prev_size then return
+      if stats.size <= prev_size then return
 
-    # Aborting if the mtime is the same is a pretty ham-fisted way of dealing
-    # with duplicate notifications. We'll disable it for now.
-    #if stats.mtime.getTime() == prev_mtime.getTime() then return
+      # Aborting if the mtime is the same is a pretty ham-fisted way of dealing
+      # with duplicate notifications. We'll disable it for now.
+      #if stats.mtime.getTime() == prev_mtime.getTime() then return
 
-    prev_mtime = stats.mtime
+      prev_mtime = stats.mtime
 
-    # Not every chunk of data we get will have complete lines, so we'll often
-    # have to keep a piece of the previous chunk to process the next.
-    accumulated_data = ''
+      # Not every chunk of data we get will have complete lines, so we'll often
+      # have to keep a piece of the previous chunk to process the next.
+      accumulated_data = ''
 
-    read_stream = fs.createReadStream(filename, { encoding: 'utf8', start: prev_size })
-    read_stream.on 'data', (new_data) -> 
-      accumulated_data += new_data
-      [bytes_consumed, lines] = get_lines(accumulated_data)
+      read_stream = fs.createReadStream(filename, { encoding: 'utf8', start: prev_size })
 
-      # Move our data forward by the number of bytes we've really processed.
-      accumulated_data = accumulated_data[bytes_consumed..]
-      prev_size += bytes_consumed
+      read_stream.on 'error', (error) ->
+        # Swallow file-not-found
+        if error.code != 'ENOENT'
+          follower.emit('error', filename, error)
 
-      # Tell our listeners about the new lines
-      lines.forEach((line) -> follower.emit('line', filename, line))
+      read_stream.on 'data', (new_data) -> 
+        accumulated_data += new_data
+        [bytes_consumed, lines] = get_lines(accumulated_data)
+
+        # Move our data forward by the number of bytes we've really processed.
+        accumulated_data = accumulated_data[bytes_consumed..]
+        prev_size += bytes_consumed
+
+        # Tell our listeners about the new lines
+        lines.forEach((line) -> follower.emit('line', filename, line))
 
   # Hook up our change handler to the file watcher
   watcher.on('change', onchange)

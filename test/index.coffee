@@ -426,6 +426,10 @@ describe 'text-file-follower', ->
         test = true
 
     it "should 'retain' a file that gets deleted and re-created", (done) ->
+
+      if process.platform == 'linux'
+        console.log('!!!! Fails on Linux due to watchit bug ("expected 3 to equal 2") !!!!')
+
       line_count = 0
       next = null
       curr_filename = ''
@@ -459,15 +463,12 @@ describe 'text-file-follower', ->
           expect(received_lines.shift()).to.equal('qwe')
 
           # Delete the file
-          fs.unlink curr_filename, (err) ->
-            if err? 
-              console.log(err)
-              throw new Error()
+          fs.unlink curr_filename, (error) ->
+            if error? then throw new Error(error)
 
             long_delay ->
               # Create the file and put a line in it.
               fs.writeFileSync(curr_filename, '')
-
               expect(fs.statSync(curr_filename).size).to.equal(0)
 
               long_delay ->

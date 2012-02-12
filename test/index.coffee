@@ -2,6 +2,9 @@
 expect = require('chai').expect
 fs = require('fs')
 _ = require('underscore')
+Q = require('q')
+
+
 
 long_delay = (func) -> setTimeout func, 100
 delay = _.defer #(func) -> setTimeout func, 100
@@ -122,10 +125,13 @@ describe 'text-file-follower', ->
         fs.mkdirSync('fixtures/testdir')
       fs.writeFileSync('fixtures/a.test', '')
       fs.writeFileSync('fixtures/b.test', '')
+      fs.writeFileSync('fixtures/c.test', '')
     
     beforeEach ->
       # Make it zero-size again
       fs.writeFileSync('fixtures/a.test', '')
+      fs.writeFileSync('fixtures/b.test', '')
+      fs.writeFileSync('fixtures/c.test', '')
     
     follower = require('../lib')
 
@@ -264,37 +270,49 @@ describe 'text-file-follower', ->
     it "should successfully work with two different files at once", (done) ->
       line_count = 0
 
-      long_delay ->
+      f1_line = 'f1'
+      f1_filename = 'fixtures/a.test'
+      f1 = follower.follow(f1_filename)
+      f1.on 'error', -> throw new Error()
 
-        f1_line = 'f1'
-        f1_filename = 'fixtures/a.test'
-        f1 = follower.follow(f1_filename)
-        f1.on 'error', -> throw new Error()
-        f1.on 'line', (filename, line) ->
-          expect(filename).to.equal(f1_filename)
-          expect(line).to.equal(f1_line)
-          line_count++
+      f1_line_deferred = Q.defer()
+      f1.on 'line', (filename, line) ->
+        expect(filename).to.equal(f1_filename)
+        expect(line).to.equal(f1_line)
+        line_count++
+        f1_line_deferred.resolve(line)
 
-        f2_line = 'f2'
-        f2_filename = 'fixtures/b.test'
-        f2 = follower.follow(f2_filename)
-        f2.on 'error', -> throw new Error()
-        f2.on 'line', (filename, line) ->
-          expect(filename).to.equal(f2_filename)
-          expect(line).to.equal(f2_line)
-          line_count++
+      f2_line = 'f2'
+      f2_filename = 'fixtures/b.test'
+      f2 = follower.follow(f2_filename)
+      f2.on 'error', -> throw new Error()
 
-        f1.on 'success', ->
-          appendSync(f1_filename, f1_line+'\n')
+      f2_line_deferred = Q.defer()
+      f2.on 'line', (filename, line) ->
+        expect(filename).to.equal(f2_filename)
+        expect(line).to.equal(f2_line)
+        line_count++
+        f2_line_deferred.resolve(line)
 
-        f2.on 'success', ->
-          appendSync(f2_filename, f2_line+'\n')
+      f1.on 'success', ->
+        appendSync(f1_filename, f1_line+'\n')
 
-        long_delay ->
-          expect(line_count).to.equal(2)
-          f1.close()
-          f2.close()
-          done()
+      f2.on 'success', ->
+        appendSync(f2_filename, f2_line+'\n')
+
+      Q.all([f1_line_deferred, f2_line_deferred]).then ->
+        expect(line_count).to.equal(2)
+        f1.close()
+        f2.close()
+
+      f1_close_deferred = Q.defer()
+      f1.on 'close', f1_close_deferred.resolve
+
+      f2_close_deferred = Q.defer()
+      f2.on 'close', f2_close_deferred.resolve
+
+      Q.all([f1_close_deferred, f2_close_deferred]).then ->
+        done()
 
     it "should successfully close and re-open a follower", (done) ->
       line_count = 0
@@ -307,7 +325,7 @@ describe 'text-file-follower', ->
         received_lines.push(line)
         delay next
 
-      curr_filename = 'fixtures/a.test'
+      curr_filename = 'fixtures/c.test'
       f = follower.follow(curr_filename)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
@@ -321,22 +339,25 @@ describe 'text-file-follower', ->
           expect(received_lines.shift()).to.equal('abc')
 
           # Close
+          close_deferred = Q.defer()
+          f.on 'close', close_deferred.resolve
           f.close()
 
-          # Re-open
-          line_count = 0
-          f = follower.follow(curr_filename)
-          expect(f).to.be.ok
+          close_deferred.promise.then ->
+            # Re-open
+            line_count = 0
+            f = follower.follow(curr_filename)
+            expect(f).to.be.ok
 
-          f.on 'error', -> throw new Error()
-          f.on 'line', listener
+            f.on 'error', -> throw new Error()
+            f.on 'line', listener
 
-          f.on 'success', -> 
-            appendSync(curr_filename, 'def\n')
-            next = -> 
-              expect(line_count).to.equal(1)
-              expect(received_lines.shift()).to.equal('def')
+            f.on 'success', -> 
+              appendSync(curr_filename, 'def\n')
+              next = -> 
+                expect(line_count).to.equal(1)
+                expect(received_lines.shift()).to.equal('def')
 
-              f.on 'close', -> done()
-              f.close()
-      
+                f.on 'close', -> done()
+                f.close()
+        

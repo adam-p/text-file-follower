@@ -3,7 +3,7 @@ expect = require('chai').expect
 fs = require('fs')
 _ = require('underscore')
 
-long_delay = (func) -> setTimeout func, 1000
+long_delay = (func) -> setTimeout func, 100
 delay = _.defer #(func) -> setTimeout func, 100
 
 appendSync = (filename, str) ->
@@ -302,26 +302,21 @@ describe 'text-file-follower', ->
       curr_filename = ''
 
       listener = (filename, line) -> 
-        console.log('LLL')
         line_count++
         expect(filename).to.equal(curr_filename)
         received_lines.push(line)
         delay next
 
-      console.log('yyy')
       curr_filename = 'fixtures/a.test'
       f = follower.follow(curr_filename)
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
       f.on 'line', listener
-      console.log('zzz')
 
       received_lines = []
-      _.defer ->
+      f.on 'success', ->
         appendSync(curr_filename, 'abc\n')
-        console.log('aaa')
         next = -> 
-          console.log('bbb')
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
@@ -330,22 +325,18 @@ describe 'text-file-follower', ->
 
           # Re-open
           line_count = 0
-          curr_filename = 'fixtures/b.test'
           f = follower.follow(curr_filename)
           expect(f).to.be.ok
+
           f.on 'error', -> throw new Error()
           f.on 'line', listener
 
-          appendSync(curr_filename, 'def\n')
-          console.log('ccc')
-          next = -> 
-            console.log('ddd')
-            expect(line_count).to.equal(1)
-            expect(received_lines.shift()).to.equal('def')
+          f.on 'success', -> 
+            appendSync(curr_filename, 'def\n')
+            next = -> 
+              expect(line_count).to.equal(1)
+              expect(received_lines.shift()).to.equal('def')
 
-            f.close()
-            delay ->
-              done()
-
-
+              f.on 'close', -> done()
+              f.close()
       

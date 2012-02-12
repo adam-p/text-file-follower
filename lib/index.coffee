@@ -135,6 +135,9 @@ follow = (filename, options = {}, listener = null) ->
   watcher.on('failure', -> 
     follower.emit('error', filename))
 
+  watcher.on('close', -> 
+    follower.emit('close', filename))
+
   # Function that gets called when a change is detected in the file.
   onchange = (filename) -> 
 

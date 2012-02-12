@@ -29,47 +29,6 @@ watchit = require('watchit')
 _ = require('underscore')
 
 
-###
-Figure out if the text uses \n (unix) or \r\n (windows) newlines.
-###
-deduce_newline_value = (sample) ->
-  if sample.indexOf('\r\n') >= 0
-    return '\r\n'
-  return '\n'
-
-###
-Splits the text into complete lines (must end with newline). 
-Returns a tuple of [bytes_consumed, [line1, line2, ...]]
-###
-get_lines = (text) ->
-  newline = deduce_newline_value(text)
-  lines = text.split(newline)
-  # Exclude the last item in the array, since it will be an empty or incomplete line.
-  lines.pop()
-
-  if lines.length == 0
-    return [0, []]
-
-  bytes_consumed = _.reduce(lines, 
-                            (memo, line) -> return memo+line.length,
-                            0)
-  # Add back the newline characters
-  bytes_consumed += lines.length * newline.length
-
-  return [bytes_consumed, lines]
-
-
-###
-The emitter that's returned from follow(). It can be used to listen for events,
-and it can also be used to close the follower.
-###
-class Follower extends events.EventEmitter
-  constructor: (@watcher) ->
-  
-  # Shut down the follower
-  close: -> 
-    @watcher.close()
-
 
 default_options = 
   persistent: true
@@ -80,13 +39,22 @@ Watch for changes on `filename`.
   {
     persistent: boolean, (default: true; ref: http://nodejs.org/docs/latest/api/fs.html#fs.watch)
   }
-listener is an optional callback that takes two arguments: `(event, value)`. The 
-possible event is `line`, and the value will the new line that has been added to 
-the watched/followed file. 
-Returns an instance of the Follower object, which is an EventEmitter and can be 
-used to listen for the `line` and `error` events. It also has a `close()` member 
-that ends the following. Emitted events pass the watched filename (and the line,
-for `line` to the bound callback).
+
+listener is an optional callback that takes three arguments: `(event, filename, value)`. 
+
+Returns an instance of the Follower object, which is an EventEmitter.
+
+If a specific event is listened for, the callback will be passed `(filename, value)`.
+The 'all' event can also be listened for. Its callback will be passed
+`(event, filename, value)` (exactly like the listener callback passed into `follow`).
+
+The possible events are:
+  * `'success'`: The follower started up successfully. `value` is undefined.
+  * `'line'`: `value` will be the new line that has been added to the file.
+  * `'close'`: The follower has been closed. `value` is undefined.
+  * `'error'`: An error has occurred. `value` will contain error information.
+
+The returned emitter also has a `close()` member that ends the following. 
 ###
 
 follow = (filename, options = {}, listener = null) ->
@@ -127,7 +95,7 @@ follow = (filename, options = {}, listener = null) ->
 
   # Create the Follower object that we'll ultimately return
   follower = new Follower(watcher)
-  if listener? then follower.addListener('line', listener)
+  if listener? then follower.addListener('all', listener)
 
   # watchit will emit success every time the file is unlinked and recreated, but
   # we only want to emit it once.
@@ -195,6 +163,57 @@ follow = (filename, options = {}, listener = null) ->
   watcher.on('change', onchange)
 
   return follower
+
+
+###
+Helpers
+###
+
+###
+The emitter that's returned from follow(). It can be used to listen for events,
+and it can also be used to close the follower.
+###
+class Follower extends events.EventEmitter
+  constructor: (@watcher) ->
+
+  emit: (event, filename, etc...) ->
+    return if event is 'newListener'
+    super event, filename, etc...
+    super 'all', event, filename, etc...
+  
+  # Shut down the follower
+  close: -> 
+    @watcher.close()
+
+###
+Figure out if the text uses \n (unix) or \r\n (windows) newlines.
+###
+deduce_newline_value = (sample) ->
+  if sample.indexOf('\r\n') >= 0
+    return '\r\n'
+  return '\n'
+
+###
+Splits the text into complete lines (must end with newline). 
+Returns a tuple of [bytes_consumed, [line1, line2, ...]]
+###
+get_lines = (text) ->
+  newline = deduce_newline_value(text)
+  lines = text.split(newline)
+  # Exclude the last item in the array, since it will be an empty or incomplete line.
+  lines.pop()
+
+  if lines.length == 0
+    return [0, []]
+
+  bytes_consumed = _.reduce(lines, 
+                            (memo, line) -> return memo+line.length,
+                            0)
+  # Add back the newline characters
+  bytes_consumed += lines.length * newline.length
+
+  return [bytes_consumed, lines]
+
 
 
 exports.follow = follow

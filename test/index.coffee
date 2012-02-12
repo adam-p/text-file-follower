@@ -206,34 +206,91 @@ describe 'text-file-follower', ->
                 else
                   throw Error('bad line_count')
 
-    it "should read lines from a fresh file successfully, using the listener callback", (done) ->
+    it "should read lines from a file, using the listener callback", (done) ->
       line_count = 0
       next = null
       received_lines = []
+      expected_event = ''
+      curr_filename = ''
 
-      listener = (filename, line) -> 
-        line_count++
-        expect(filename).to.equal('fixtures/a.test')
-        received_lines.push(line)
-        _.defer next
+      listener = (event, filename, value) ->         
+        expect(event).to.equal(expected_event)
+        expect(filename).to.equal(curr_filename)
+        if event == 'line'
+          line_count++
+          received_lines.push(value)
+        else if event == 'error'
+          throw new Error(value) # won't actually get here, since the expected_event check will fail
+        if next? then _.defer next
+
+      curr_filename = 'fixtures/a.test'
 
       f = follower.follow('fixtures/a.test', listener)
       expect(f).to.be.ok
-      f.on 'error', -> throw new Error()
 
-      f.on 'success', ->
+      expected_event = 'success'
+      next = ->
+
+        expected_event = 'line'
         appendSync('fixtures/a.test', 'abc\n')
         next = -> 
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
+          expected_event = 'line'
           appendSync('fixtures/a.test', 'def\n')
           next = -> 
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
 
-            f.on 'close', -> done()
+            expected_event = 'close'
             f.close()
+            next = ->
+              done()
+
+    it "should read lines from a file, using the 'all' listener", (done) ->
+      line_count = 0
+      next = null
+      received_lines = []
+      expected_event = ''
+      curr_filename = ''
+
+      listener = (event, filename, value) ->         
+        expect(event).to.equal(expected_event)
+        expect(filename).to.equal(curr_filename)
+        if event == 'line'
+          line_count++
+          received_lines.push(value)
+        else if event == 'error'
+          throw new Error(value) # won't actually get here, since the expected_event check will fail
+        if next? then _.defer next
+
+      curr_filename = 'fixtures/a.test'
+
+      f = follower.follow('fixtures/a.test')
+      expect(f).to.be.ok
+
+      f. on 'all', listener
+
+      expected_event = 'success'
+      next = ->
+
+        expected_event = 'line'
+        appendSync('fixtures/a.test', 'abc\n')
+        next = -> 
+          expect(line_count).to.equal(1)
+          expect(received_lines.shift()).to.equal('abc')
+
+          expected_event = 'line'
+          appendSync('fixtures/a.test', 'def\n')
+          next = -> 
+            expect(line_count).to.equal(2)
+            expect(received_lines.shift()).to.equal('def')
+
+            expected_event = 'close'
+            f.close()
+            next = ->
+              done()
 
     it "should read lines from the end of a non-empty file", (done) ->
       line_count = 0
@@ -248,9 +305,11 @@ describe 'text-file-follower', ->
 
       appendSync('fixtures/a.test', 'will not\nget read\n')
 
-      f = follower.follow('fixtures/a.test', listener)
+      f = follower.follow('fixtures/a.test')
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
+
+      f.on 'line', listener
 
       f.on 'success', ->
         appendSync('fixtures/a.test', 'abc\n')

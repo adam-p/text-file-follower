@@ -129,8 +129,12 @@ follow = (filename, options = {}, listener = null) ->
   follower = new Follower(watcher)
   if listener? then follower.addListener('line', listener)
 
+  # watchit will emit success every time the file is unlinked and recreated, but
+  # we only want to emit it once.
+  success_emitted = false
   watcher.on 'success', -> 
-    follower.emit('success', filename)
+    if not success_emitted then follower.emit('success', filename)
+    success_emitted = true
 
   watcher.on('failure', -> 
     follower.emit('error', filename))

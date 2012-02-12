@@ -415,11 +415,68 @@ describe 'text-file-follower', ->
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
-      test = false
-      f.on 'close', -> 
-        # This should only get hit after the below code completes.
-        expect(test).to.be.true
-        done()
+      f.on 'success', ->
+        test = false
+        f.on 'close', -> 
+          # This should only get hit after all of the synchronous code below completes.
+          expect(test).to.be.true
+          done()
 
-      f.close()
-      test = true
+        f.close()
+        test = true
+
+    it "should 'retain' a file that gets deleted and re-created", (done) ->
+      line_count = 0
+      next = null
+      curr_filename = ''
+
+      listener = (filename, line) -> 
+        line_count++
+        expect(filename).to.equal(curr_filename)
+        received_lines.push(line)
+        _.defer next
+
+      curr_filename = 'fixtures/a.test'
+      f = follower.follow(curr_filename)
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+      f.on 'line', listener
+
+      received_lines = []
+
+      success_listener_called = false
+
+      f.on 'success', ->
+
+        # Our follower should only emit 'success' once, even when the file gets
+        # deleted and re-created. (watchit emits 'success' more than once.)
+        expect(success_listener_called).to.equal(false)
+        success_listener_called = true
+
+        appendSync(curr_filename, 'qwe\n')
+        next = -> 
+          expect(line_count).to.equal(1)
+          expect(received_lines.shift()).to.equal('qwe')
+
+          # Delete the file
+          fs.unlink curr_filename, (err) ->
+            if err? 
+              console.log(err)
+              throw new Error()
+
+            long_delay ->
+              # Create the file and put a line in it.
+              fs.writeFileSync(curr_filename, '')
+
+              expect(fs.statSync(curr_filename).size).to.equal(0)
+
+              long_delay ->
+                appendSync(curr_filename, 'rty\n')
+                expect(fs.statSync(curr_filename).size).to.equal(4)
+
+                next = -> 
+                  expect(line_count).to.equal(2)
+                  expect(received_lines.shift()).to.equal('rty')
+
+                  f.close()
+                  f.on 'close', -> done()

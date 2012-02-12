@@ -15,10 +15,6 @@
 
 - Move .coffee to /src and add make target that compiles to /lib. 
 
-- Add test case(s) for a followed file that gets deleted and re-created.
-  - Guaranteed to fail on Linux at this time due to a 
-    [watchit bug](https://github.com/TrevorBurnham/Watchit/issues/1).
-
 - Add 'catchup' (process whole file first) feature.
 
 - Run through linter.

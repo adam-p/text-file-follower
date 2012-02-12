@@ -1,7 +1,17 @@
+IS_CYGWIN := $(shell uname | sed -e '/.*\(CYGWIN\).*/!d;s//\1/')
+
+COFFEE := coffee
+MOCHA := mocha
+
+ifneq ($(IS_CYGWIN),)
+	COFFEE := ../node_modules/.bin/coffee.cmd
+	MOCHA := ../node_modules/.bin/mocha.cmd
+endif
+
 
 lib/%.js: src/%.coffee
-	coffee -c -o lib src/*.coffee
+	$(COFFEE) -c -o lib src/*.coffee
 
 test: lib/*.js
-	mocha --require chai --reporter list test/*.coffee
+	$(MOCHA) --require chai --reporter list test/*.coffee
 .PHONY: test

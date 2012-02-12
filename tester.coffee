@@ -55,7 +55,7 @@ rl.on 'line', (cmd) ->
       retval = wrap -> fs.renameSync filename, copy_name
       if retval
         files_to_delete.push copy_name
-        console.log "renamed to #{copy_name}; continuing to follow #{filename}"
+        console.log "renamed to #{copy_name}; continuing to modify #{filename}"
     when 'truncate'
       fd = fs.openSync filename, 'w'
       fs.truncateSync fd

@@ -299,7 +299,7 @@ describe 'text-file-follower', ->
       f2.on 'success', ->
         appendSync(f2_filename, f2_line+'\n')
 
-      Q.all([f1_line_deferred, f2_line_deferred]).then ->
+      Q.all([f1_line_deferred.promise, f2_line_deferred.promise]).then ->
         expect(line_count).to.equal(2)
         f1.close()
         f2.close()
@@ -310,7 +310,7 @@ describe 'text-file-follower', ->
       f2_close_deferred = Q.defer()
       f2.on 'close', f2_close_deferred.resolve
 
-      Q.all([f1_close_deferred, f2_close_deferred]).then ->
+      Q.all([f1_close_deferred.promise, f2_close_deferred.promise]).then ->
         done()
 
     it "should be able to put two watchers on the same file", (done) ->
@@ -345,7 +345,7 @@ describe 'text-file-follower', ->
       f2_success_deferred = Q.defer()
       f2.on 'success', f2_success_deferred.resolve
 
-      Q.all([f1_success_deferred, f2_success_deferred]).then ->
+      Q.all([f1_success_deferred.promise, f2_success_deferred.promise]).then ->
         appendSync(curr_filename, curr_line+'\n')
 
       f1_close_deferred = Q.defer()
@@ -354,12 +354,12 @@ describe 'text-file-follower', ->
       f2_close_deferred = Q.defer()
       f2.on 'close', f2_close_deferred.resolve
 
-      Q.all([f1_line_deferred, f2_line_deferred]).then ->
+      Q.all([f1_line_deferred.promise, f2_line_deferred.promise]).then ->
         expect(line_count).to.equal(2)
         f1.close()
         f2.close()
 
-      Q.all([f1_close_deferred, f2_close_deferred]).then ->
+      Q.all([f1_close_deferred.promise, f2_close_deferred.promise]).then ->
         done()
 
     it "should successfully close and re-open a follower", (done) ->

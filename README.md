@@ -2,6 +2,9 @@
 
 # TODO
 
+- Switch from `fs.statSync` to `fs.stat`. 
+  - Maybe also start using the Q module.
+
 - Handle all exceptions. For example, in the `onchange` handler, if the file 
   disappears between the `fs.statSync` check and the `fs.createReadStream` call 
   (or between when watchit emits `'change'` and the `fs.statSync` call), an 

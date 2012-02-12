@@ -164,8 +164,9 @@ describe 'text-file-follower', ->
     it "should start successfully in a simple scenario", (done) ->
       f = follow('fixtures/a.test')
       expect(f).to.be.ok
-      f.close()
-      done()
+      f.on 'success', -> 
+        f.close()
+        f.on 'close', -> done()
 
     it "should read lines from a fresh file successfully, using the emitter", (done) ->
       line_count = 0
@@ -442,8 +443,10 @@ describe 'text-file-follower', ->
         _.defer next
 
       curr_filename = 'fixtures/a.test'
+
       f = follow(curr_filename)
       expect(f).to.be.ok
+
       f.on 'error', -> throw new Error()
       f.on 'line', listener
 
@@ -454,11 +457,9 @@ describe 'text-file-follower', ->
           expect(received_lines.shift()).to.equal('abc')
 
           # Close
-          close_deferred = Q.defer()
-          f.on 'close', close_deferred.resolve
           f.close()
+          f.on 'close', ->
 
-          close_deferred.promise.then ->
             # Re-open
             line_count = 0
             f = follow(curr_filename)
@@ -468,6 +469,7 @@ describe 'text-file-follower', ->
             f.on 'line', listener
 
             f.on 'success', -> 
+
               appendSync(curr_filename, 'def\n')
               next = -> 
                 expect(line_count).to.equal(1)

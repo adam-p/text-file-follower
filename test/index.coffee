@@ -496,6 +496,7 @@ describe 'text-file-follower', ->
 
       if process.platform == 'linux'
         console.log('!!!! Fails on Linux due to watchit bug ("expected 3 to equal 2") !!!!')
+        return done()
 
       line_count = 0
       next = null
@@ -599,6 +600,12 @@ describe 'text-file-follower', ->
               expect(line_count).to.equal(1)
               expect(received_lines.shift()).to.equal('abc')
 
-              f.close()
-              expected_event = 'close'
-              next = -> done()
+              appendSync(curr_filename, 'def\n')
+              expected_event = 'line'
+              next = -> 
+                expect(line_count).to.equal(2)
+                expect(received_lines.shift()).to.equal('def')
+
+                f.close()
+                expected_event = 'close'
+                next = -> done()

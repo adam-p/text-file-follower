@@ -2,8 +2,6 @@
 
 # TODO
 
-- Move .coffee to /src and add make target that compiles to /lib. 
-
 - Add 'catchup' (process whole file first) feature.
 
 - Properly handle pre-existing partial line when watcher first starts
@@ -12,6 +10,8 @@
 - Make a behaviour rule for if the file shrinks
   - Don't start returning lines until it reaches the previous maximum length?
   - Start returning lines when the file starts growing again? (Prolly that.)
+
+- Maybe create a Cakefile (steal watch it's)
 
 - Make encoding an option?
 

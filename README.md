@@ -3,6 +3,8 @@
 
 A Node.js module for getting each new last line of a text file as it appears. Think `tail -f`. Its obvious use is for consuming log lines, but it can be used for any newline-delimited text file.
 
+`text-file-follower` is written in CoffeeScript, but a compiled JavaScript can be found in the `lib` directory.
+
 ## Usage
 
 Some day installation will be via `npm`. For now you'll have to put the code where you want it (either lib/index.js or src/index.coffee).
@@ -98,6 +100,21 @@ follower.on('line', function(filename, line) {
 // process alive forever (if we opened it with persistent:true).
 follower.close();
 ```
+
+The simple example from above, in CoffeeScript:
+
+```coffeescript
+follow = require 'text-file-follower'
+
+follower = follow '/var/log/syslog'
+
+follower.on 'line', (filename, line) ->
+  console.log "Got a new line from #{filename}: #{line}"
+
+# ... and then eventually:
+follower.close()
+```
+
 
 ## Behaviour Notes
 

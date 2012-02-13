@@ -140,6 +140,12 @@ The follower will wait until it gets re-created and start following it again **f
 
 See comment below in the "OS Compatibility" section for bad behaviour on Linux.
 
+##### File that gets renamed during following
+
+The behaviour is basically the same as the deleted+recreated case: The follower will wait until it gets re-created and start following it again **from the start of the file**.
+
+And again, see comment below in the "OS Compatibility" section for bad behaviour on Linux.
+
 ##### File shrinks during following
 
 The current behaviour is that lines won't start getting emitted until the file grows past its previous size again.
@@ -170,7 +176,8 @@ Note: All observations are made while using the `{retain:true}` option with [wat
 ### Linux
 
 * Tests pass, except...
-* Due to a [watchit bug](https://github.com/TrevorBurnham/Watchit/issues/1) (which itself is due to a `fs.watch` oddity), when a watched file is deleted (or renamed) and recreated, the result will be two watchers.
+* Due to a [watchit bug](https://github.com/TrevorBurnham/Watchit/issues/1) (which itself is due to a `fs.watch` oddity), when a watched file is deleted and recreated, the result will be two watchers.
+* Probably also due to a watchit/`fs.watch` bug, after a watched file is renamed it gets permanently lost -- no more events come in for it (except `'close'`).
 
 ### OS X
 

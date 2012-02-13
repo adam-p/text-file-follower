@@ -146,6 +146,16 @@ The current behaviour is that lines won't start getting emitted until the file g
 
 This behaviour could be changed. (My understanding is that when log files get rotated they are renamed and then a fresh file is created. Which should be fine with the current behaviour.)
 
+##### Pre-existing partial line
+
+A file that looks like this when the follower starts is an example of what we mean by a "pre-existing partial line":
+
+    line one\n
+    line two\n
+    line three has no newline
+
+When the follower starts, it begins returning text from the end of the file. So if `, but now it does\n` gets appended to the file, that's the first line/text that will be emitted -- the `line three has no newline` part will not be included.
+
 ## OS Compatibility
 
 The behaviour of `fs.watch` (which is what [watchit](https://github.com/TrevorBurnham/Watchit) is based on) is kinda sketchy. See the [bug list](https://github.com/joyent/node/issues/search?q=fs.watch&state=open).
@@ -168,18 +178,9 @@ Note: All observations are made while using the `{retain:true}` option with [wat
 
 ## TODO
 
-* Write test case for file getting renamed.
-
 * Add 'catchup' (process whole file first) feature.
 
-* Properly handle pre-existing partial line when watcher first starts
-  * Or state explicitly that it won't be handled.
-
-* Make a behaviour rule for if the file shrinks
-  * Don't start returning lines until it reaches the previous maximum length?
-  * Start returning lines when the file starts growing again? (Prolly that.)
-
-* Maybe create a Cakefile (steal watch it's)
+* Maybe create a Cakefile (steal watchit's)
 
 * Turn into real Node (npm) module.
 

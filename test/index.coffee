@@ -1,6 +1,7 @@
 
 expect = require('chai').expect
 fs = require('fs')
+path = require('path')
 _ = require('underscore')
 Q = require('q')
 
@@ -20,6 +21,9 @@ describe 'text-file-follower', ->
   before ->
     try
       fs.mkdirSync('fixtures')
+
+  after ->
+    fs.rmdirSync('fixtures')
 
   describe '#load-module', ->
 
@@ -95,7 +99,7 @@ describe 'text-file-follower', ->
 
     it "should correctly split input that does not end with a newline", ->
 
-      # A line isn't considered complete, and so shouldn't be counted, if it 
+      # A line isn't considered complete, and so shouldn't be counted, if it
       # doesn't end with a newline.
 
       not_newline_end = "foobar"
@@ -126,13 +130,22 @@ describe 'text-file-follower', ->
       fs.writeFileSync('fixtures/a.test', '')
       fs.writeFileSync('fixtures/b.test', '')
       fs.writeFileSync('fixtures/c.test', '')
-    
+
     beforeEach ->
       # Make it zero-size again
       fs.writeFileSync('fixtures/a.test', '')
       fs.writeFileSync('fixtures/b.test', '')
       fs.writeFileSync('fixtures/c.test', '')
-    
+
+    after ->
+      fixture_filenames = fs.readdirSync('fixtures')
+      for filename in fixture_filenames
+        filename = path.join('fixtures', filename)
+        if fs.statSync(filename).isDirectory()
+          fs.rmdirSync(filename)
+        else
+          fs.unlinkSync(filename)
+
     follow = require('../lib')
 
     it "should reject bad arguments", ->
@@ -151,7 +164,7 @@ describe 'text-file-follower', ->
       f = follow('fixtures/testdir')
       f.on 'error', (filename, error) ->
         expect(error).to.equal('not a file')
-        f.close() 
+        f.close()
         f.on 'close', -> done()
 
     it "should not throw an error when the file doesn't exist", (done) ->
@@ -164,7 +177,7 @@ describe 'text-file-follower', ->
     it "should start successfully in a simple scenario", (done) ->
       f = follow('fixtures/a.test')
       expect(f).to.be.ok
-      f.on 'success', -> 
+      f.on 'success', ->
         f.close()
         f.on 'close', -> done()
 
@@ -177,7 +190,7 @@ describe 'text-file-follower', ->
       expect(f).to.be.ok
       f.on 'error', -> throw new Error()
 
-      f.on 'line', (filename, line) -> 
+      f.on 'line', (filename, line) ->
         line_count++
         expect(filename).to.equal('fixtures/a.test')
         received_lines.push(line)
@@ -190,18 +203,18 @@ describe 'text-file-follower', ->
           expect(line_count).to.equal(0)
 
           appendSync('fixtures/a.test', '\n')
-          next = -> 
+          next = ->
             expect(line_count).to.equal(1)
             expect(received_lines.shift()).to.equal('abc')
 
             appendSync('fixtures/a.test', 'def\n')
-            next = -> 
+            next = ->
               expect(line_count).to.equal(2)
               expect(received_lines.shift()).to.equal('def')
 
               call_count = 0
               appendSync('fixtures/a.test', 'ghi\njkl\n')
-              next = -> 
+              next = ->
                 # This will get called twice.
                 if call_count == 0
                   expect(received_lines.shift()).to.equal('ghi')
@@ -222,7 +235,7 @@ describe 'text-file-follower', ->
       expected_event = ''
       curr_filename = ''
 
-      listener = (event, filename, value) ->         
+      listener = (event, filename, value) ->
         expect(event).to.equal(expected_event)
         expect(filename).to.equal(curr_filename)
         if event == 'line'
@@ -242,13 +255,13 @@ describe 'text-file-follower', ->
 
         expected_event = 'line'
         appendSync('fixtures/a.test', 'abc\n')
-        next = -> 
+        next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
           expected_event = 'line'
           appendSync('fixtures/a.test', 'def\n')
-          next = -> 
+          next = ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
 
@@ -264,7 +277,7 @@ describe 'text-file-follower', ->
       expected_event = ''
       curr_filename = ''
 
-      listener = (event, filename, value) ->         
+      listener = (event, filename, value) ->
         expect(event).to.equal(expected_event)
         expect(filename).to.equal(curr_filename)
         if event == 'line'
@@ -286,13 +299,13 @@ describe 'text-file-follower', ->
 
         expected_event = 'line'
         appendSync('fixtures/a.test', 'abc\n')
-        next = -> 
+        next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
           expected_event = 'line'
           appendSync('fixtures/a.test', 'def\n')
-          next = -> 
+          next = ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
 
@@ -306,7 +319,7 @@ describe 'text-file-follower', ->
       next = null
       received_lines = []
 
-      listener = (filename, line) -> 
+      listener = (filename, line) ->
         line_count++
         expect(filename).to.equal('fixtures/a.test')
         received_lines.push(line)
@@ -322,12 +335,12 @@ describe 'text-file-follower', ->
 
       f.on 'success', ->
         appendSync('fixtures/a.test', 'abc\n')
-        next = -> 
+        next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
           appendSync('fixtures/a.test', 'def\n')
-          next = -> 
+          next = ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
 
@@ -436,7 +449,7 @@ describe 'text-file-follower', ->
       curr_filename = ''
       received_lines = []
 
-      listener = (filename, line) -> 
+      listener = (filename, line) ->
         line_count++
         expect(filename).to.equal(curr_filename)
         received_lines.push(line)
@@ -452,7 +465,7 @@ describe 'text-file-follower', ->
 
       f.on 'success', ->
         appendSync(curr_filename, 'abc\n')
-        next = -> 
+        next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
@@ -468,10 +481,10 @@ describe 'text-file-follower', ->
             f.on 'error', -> throw new Error()
             f.on 'line', listener
 
-            f.on 'success', -> 
+            f.on 'success', ->
 
               appendSync(curr_filename, 'def\n')
-              next = -> 
+              next = ->
                 expect(line_count).to.equal(1)
                 expect(received_lines.shift()).to.equal('def')
 
@@ -486,7 +499,7 @@ describe 'text-file-follower', ->
 
       f.on 'success', ->
         test = false
-        f.on 'close', -> 
+        f.on 'close', ->
           # This should only get hit after all of the synchronous code below completes.
           expect(test).to.be.true
           done()
@@ -505,7 +518,7 @@ describe 'text-file-follower', ->
       curr_filename = ''
       received_lines = []
 
-      listener = (filename, line) -> 
+      listener = (filename, line) ->
         line_count++
         expect(filename).to.equal(curr_filename)
         received_lines.push(line)
@@ -527,7 +540,7 @@ describe 'text-file-follower', ->
         success_listener_called = true
 
         appendSync(curr_filename, 'qwe\n')
-        next = -> 
+        next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('qwe')
 
@@ -544,7 +557,7 @@ describe 'text-file-follower', ->
                 appendSync(curr_filename, 'rty\n')
                 expect(fs.statSync(curr_filename).size).to.equal(4)
 
-                next = -> 
+                next = ->
                   expect(line_count).to.equal(2)
                   expect(received_lines.shift()).to.equal('rty')
 
@@ -559,7 +572,7 @@ describe 'text-file-follower', ->
       expected_event = ''
       received_lines = []
 
-      listener = (event, filename, value) ->         
+      listener = (event, filename, value) ->
         expect(event).to.equal(expected_event)
         expect(filename).to.equal(curr_filename)
         if event == 'line'
@@ -576,7 +589,7 @@ describe 'text-file-follower', ->
 
         f = follow(curr_filename)
         expect(f).to.be.ok
-  
+
         f.on 'all', listener
 
         # We're not going to set `expected_event` to `'success'` yet, because we
@@ -598,16 +611,69 @@ describe 'text-file-follower', ->
 
             appendSync(curr_filename, 'abc\n')
             expected_event = 'line'
-            next = -> 
+            next = ->
               expect(line_count).to.equal(1)
               expect(received_lines.shift()).to.equal('abc')
 
               appendSync(curr_filename, 'def\n')
               expected_event = 'line'
-              next = -> 
+              next = ->
                 expect(line_count).to.equal(2)
                 expect(received_lines.shift()).to.equal('def')
 
                 f.close()
                 expected_event = 'close'
                 next = -> done()
+
+    it "should 'retain' a file(name) that gets renamed and re-created", (done) ->
+
+      line_count = 0
+      next = null
+      curr_filename = ''
+      received_lines = []
+
+      listener = (filename, line) ->
+        line_count++
+        expect(filename).to.equal(curr_filename)
+        received_lines.push(line)
+        _.defer next
+
+      curr_filename = 'fixtures/a.test'
+      f = follow(curr_filename)
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+      f.on 'line', listener
+
+      success_listener_called = false
+
+      f.on 'success', ->
+
+        # Our follower should only emit 'success' once, even when the file gets
+        # renamed and re-created. (watchit emits 'success' more than once.)
+        expect(success_listener_called).to.equal(false)
+        success_listener_called = true
+
+        appendSync(curr_filename, 'qwe\n')
+        next = ->
+          expect(line_count).to.equal(1)
+          expect(received_lines.shift()).to.equal('qwe')
+
+          # Rename the file
+          fs.rename curr_filename, curr_filename+(new Date().getTime()), (error) ->
+            if error? then throw new Error(error)
+
+            long_delay ->
+              # Re-create the file and put a line in it.
+              fs.writeFileSync(curr_filename, '')
+              expect(fs.statSync(curr_filename).size).to.equal(0)
+
+              long_delay ->
+                appendSync(curr_filename, 'rty\n')
+                expect(fs.statSync(curr_filename).size).to.equal(4)
+
+                next = ->
+                  expect(line_count).to.equal(2)
+                  expect(received_lines.shift()).to.equal('rty')
+
+                  f.close()
+                  f.on 'close', -> done()

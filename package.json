@@ -1,7 +1,7 @@
 {
   "author": "Adam Pritchard (pritchard.adam@gmail.com)",
   "name": "text-file-follower",
-  "description": "Like `tail -f`: Get each new line from a text file as they appear.",
+  "description": "Like `tail -f`: Get each new line from a text (i.e., log) file as they appear.",
   "version": "0.0.1",
   "engines": {
     "node": ">=0.6.10"

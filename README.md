@@ -115,6 +115,19 @@ follower.on 'line', (filename, line) ->
 follower.close()
 ```
 
+### Test utility
+
+It gets very tedious to continually be adding lines to file (and deleting, and renaming, ...) in order to test callbacks/compatibility/etc. So I've created a little utility to ease this.
+
+In the root directory you will find the file `tester.coffee`; to run it: `coffee tester.coffee`. You'll be greeted by a prompt that explains the basic function: hit \<Enter\> to write a new line to the file `test.test`. So if you create a follower for `test.test`, you can trigger new `'line'` events just by hitting \<Enter\>.
+
+There are a few more commands that can be typed in as well:
+
+* `stat`: Outputs `fs.stat` information for `test.test` (in case you want to see the inode value or size or mtime).
+* `unlink`: Deletes `test.test`. In case you want to test delete-and-recreate. Note that hitting \<Enter\> again will re-create `test.test` (with a new line).
+* `rename`: Renames `test.test`. In case you want to test rename-and-recreate. Note that hitting \<Enter\> again will re-create `test.test` (with a new line).
+* `truncate`: Truncates `test.test`.
+
 
 ## Behaviour Notes
 

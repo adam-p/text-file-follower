@@ -30,7 +30,7 @@ _ = require('underscore')
 
 
 
-default_options = 
+default_options =
   persistent: true
 
 ###
@@ -40,22 +40,23 @@ Watch for changes on `filename`.
     persistent: boolean, (default: true; ref: http://nodejs.org/docs/latest/api/fs.html#fs.watch)
   }
 
-listener is an optional callback that takes three arguments: `(event, filename, value)`. 
+`listener` is an optional callback that takes three arguments: `(event, filename, value)`.
+(See the 'all' event description below for the meaning of the arguments.)
 
-Returns an instance of the Follower object, which is an EventEmitter.
+The follow function returns an instance of the Follower object, which is an EventEmitter.
 
 If a specific event is listened for, the callback will be passed `(filename, value)`.
-The 'all' event can also be listened for. Its callback will be passed
+The `'all'` event can also be listened for. Its callback will be passed
 `(event, filename, value)` (exactly like the listener callback passed into `follow`).
 
 The possible events are:
-  * `'success'`: The follower started up successfully. Will be delayed if file 
+  * `'success'`: The follower started up successfully. Will be delayed if file
                  does not exist. `value` is undefined.
   * `'line'`: `value` will be the new line that has been added to the file.
   * `'close'`: The follower has been closed. `value` is undefined.
   * `'error'`: An error has occurred. `value` will contain error information.
 
-The returned emitter also has a `close()` member that ends the following. 
+The returned emitter also has a `close()` member that stops and closes the follower.
 ###
 
 follow = (filename, options = {}, listener = null) ->
@@ -98,7 +99,7 @@ follow = (filename, options = {}, listener = null) ->
       # Just return on file-not-found
       if error.code != 'ENOENT'
         follower.emit('error', filename, error)
-      return 
+      return
 
     if not stats.isFile()
       follower.emit('error', filename, "not a file")
@@ -109,14 +110,14 @@ follow = (filename, options = {}, listener = null) ->
   # watchit will emit success every time the file is unlinked and recreated, but
   # we only want to emit it once.
   success_emitted = false
-  watcher.on 'success', -> 
+  watcher.on 'success', ->
     if not success_emitted then follower.emit('success', filename)
     success_emitted = true
 
-  watcher.on('failure', -> 
+  watcher.on('failure', ->
     follower.emit('error', filename, 'watchit failure'))
 
-  watcher.on('close', -> 
+  watcher.on('close', ->
     # It doesn't feel right to me that watchit emits the 'close' event synchronously
     # with close() being called. It means that code that looks like this doesn't
     # work (and I think it should):
@@ -128,7 +129,7 @@ follow = (filename, options = {}, listener = null) ->
     _.defer -> follower.emit('close', filename))
 
   # Function that gets called when a change is detected in the file.
-  onchange = (filename) -> 
+  onchange = (filename) ->
 
     # Get the new filesize and abort if it hasn't grown or gotten newer
     fs.stat filename, (error, stats) ->
@@ -136,7 +137,7 @@ follow = (filename, options = {}, listener = null) ->
         # Just return on file-not-found
         if error.code != 'ENOENT'
           follower.emit('error', filename, error)
-        return 
+        return
 
       if stats.size <= prev_size then return
 
@@ -157,7 +158,7 @@ follow = (filename, options = {}, listener = null) ->
         if error.code != 'ENOENT'
           follower.emit('error', filename, error)
 
-      read_stream.on 'data', (new_data) -> 
+      read_stream.on 'data', (new_data) ->
         accumulated_data += new_data
         [bytes_consumed, lines] = get_lines(accumulated_data)
 
@@ -189,10 +190,10 @@ class Follower extends events.EventEmitter
     return if event is 'newListener'
     super event, filename, etc...
     super 'all', event, filename, etc...
-  
+
   # Shut down the follower
-  close: -> 
-    if @watcher? 
+  close: ->
+    if @watcher?
       @watcher.close()
     else
       _.defer -> emit 'close', @filename
@@ -207,7 +208,7 @@ deduce_newline_value = (sample) ->
   return '\n'
 
 ###
-Splits the text into complete lines (must end with newline). 
+Splits the text into complete lines (must end with newline).
 Returns a tuple of [bytes_consumed, [line1, line2, ...]]
 ###
 get_lines = (text) ->
@@ -219,7 +220,7 @@ get_lines = (text) ->
   if lines.length == 0
     return [0, []]
 
-  bytes_consumed = _.reduce(lines, 
+  bytes_consumed = _.reduce(lines,
                             (memo, line) -> return memo+line.length,
                             0)
   # Add back the newline characters
@@ -230,7 +231,7 @@ get_lines = (text) ->
 
 # The main export is the sole real function
 module.exports = follow
-  
+
 # Also export the helpers for debug-testing
 module.exports.__get_debug_exports = ->
     deduce_newline_value: deduce_newline_value

@@ -82,6 +82,10 @@ follow = (filename, options = {}, listener = null) ->
   # Set up the file watcher
   watcher = watchit(filename, { debounce: false, retain: true, persistent: options.persistent })
 
+  # Create the Follower object that we'll ultimately return
+  follower = new Follower(watcher, filename)
+  if listener? then follower.addListener('all', listener)
+
   prev_size = 0
   prev_mtime = null
 
@@ -90,9 +94,26 @@ follow = (filename, options = {}, listener = null) ->
   watcher.on('create', -> prev_size = 0)
   watcher.on('unlink', -> prev_size = 0)
 
-  # Create the Follower object that we'll ultimately return
-  follower = new Follower(watcher, filename)
-  if listener? then follower.addListener('all', listener)
+  # watchit will emit success every time the file is unlinked and recreated, but
+  # we only want to emit it once.
+  success_emitted = false
+  watcher.on 'success', ->
+    if not success_emitted then follower.emit('success', filename)
+    success_emitted = true
+
+  watcher.on 'failure', ->
+    follower.emit('error', filename, 'watchit failure')
+
+  watcher.on 'close', ->
+    # It doesn't feel right to me that watchit emits the 'close' event synchronously
+    # with close() being called. It means that code that looks like this doesn't
+    # work (and I think it should):
+    #   mywatcher.close()
+    #   mywatcher.on('close', -> do something)
+    # I'm not certain my feeling is right, but I see no harm in making it behave
+    # this way.
+    # So I'm going to make the propagation of it asynchronous:
+    _.defer -> follower.emit('close', filename)
 
   fs.stat filename, (error, stats) ->
     if error?
@@ -103,30 +124,10 @@ follow = (filename, options = {}, listener = null) ->
 
     if not stats.isFile()
       follower.emit('error', filename, "not a file")
+      return
 
     prev_size = stats.size
     prev_mtime = stats.mtime
-
-  # watchit will emit success every time the file is unlinked and recreated, but
-  # we only want to emit it once.
-  success_emitted = false
-  watcher.on 'success', ->
-    if not success_emitted then follower.emit('success', filename)
-    success_emitted = true
-
-  watcher.on('failure', ->
-    follower.emit('error', filename, 'watchit failure'))
-
-  watcher.on('close', ->
-    # It doesn't feel right to me that watchit emits the 'close' event synchronously
-    # with close() being called. It means that code that looks like this doesn't
-    # work (and I think it should):
-    #   mywatcher.close()
-    #   mywatcher.on('close', -> do something)
-    # I'm not certain my feeling is right, but I see no harm in making it behave
-    # this way.
-    # So I'm going to make the propagation of it asynchronous:
-    _.defer -> follower.emit('close', filename))
 
   # Function that gets called when a change is detected in the file.
   onchange = (filename) ->
@@ -147,27 +148,7 @@ follow = (filename, options = {}, listener = null) ->
 
       prev_mtime = stats.mtime
 
-      # Not every chunk of data we get will have complete lines, so we'll often
-      # have to keep a piece of the previous chunk to process the next.
-      accumulated_data = ''
-
-      read_stream = fs.createReadStream(filename, { encoding: 'utf8', start: prev_size })
-
-      read_stream.on 'error', (error) ->
-        # Swallow file-not-found
-        if error.code != 'ENOENT'
-          follower.emit('error', filename, error)
-
-      read_stream.on 'data', (new_data) ->
-        accumulated_data += new_data
-        [bytes_consumed, lines] = get_lines(accumulated_data)
-
-        # Move our data forward by the number of bytes we've really processed.
-        accumulated_data = accumulated_data[bytes_consumed..]
-        prev_size += bytes_consumed
-
-        # Tell our listeners about the new lines
-        lines.forEach((line) -> follower.emit('line', filename, line))
+      read_lines_from_file(filename, prev_size, follower, (bytes_consumed) -> prev_size += bytes_consumed)
 
   # Hook up our change handler to the file watcher
   watcher.on('change', onchange)
@@ -227,6 +208,35 @@ get_lines = (text) ->
   bytes_consumed += lines.length * newline.length
 
   return [bytes_consumed, lines]
+
+
+# Reads lines from `filename`, starting at `start_pos`. Emits the lines via `follower`.
+# The callback may be called multiple times -- the argument is the number of bytes
+# consumed from the file.
+read_lines_from_file = (filename, start_pos, follower, bytes_consumed_callback) ->
+
+  # Not every chunk of data we get will have complete lines, so we'll often
+  # have to keep a piece of the previous chunk to process the next.
+  accumulated_data = ''
+
+  read_stream = fs.createReadStream(filename, { encoding: 'utf8', start: start_pos })
+
+  read_stream.on 'error', (error) ->
+    # Swallow file-not-found
+    if error.code != 'ENOENT'
+      follower.emit('error', filename, error)
+
+  read_stream.on 'data', (new_data) ->
+    accumulated_data += new_data
+    [bytes_consumed, lines] = get_lines(accumulated_data)
+
+    # Move our data forward by the number of bytes we've really processed.
+    accumulated_data = accumulated_data[bytes_consumed..]
+
+    bytes_consumed_callback(bytes_consumed)
+
+    # Tell our listeners about the new lines
+    lines.forEach((line) -> follower.emit('line', filename, line))
 
 
 # The main export is the sole real function

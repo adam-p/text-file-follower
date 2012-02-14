@@ -31,10 +31,11 @@ The follow function's arguments are:
 `options` is an optional object with the following field:
 
     {
-      persistent: boolean [default: true]
+      persistent: boolean [default: true],
+      catchup: boolean [default: false]
     }
 
-For the meaning of `persistent`, see the [fs.watch documentation](http://nodejs.org/docs/latest/api/fs.html#fs.watch).
+For the meaning of `persistent`, see the [fs.watch documentation](http://nodejs.org/docs/latest/api/fs.html#fs.watch). If `catchup` is `true`, lines will be read and emitted from the beginning of the file, rather than only new lines being read and emitted.
 
 `listener` is an optional callback that takes three arguments: `(event, filename, value)`. (See the 'all' event description below for the meaning of the arguments.)
 
@@ -198,11 +199,7 @@ Note: All observations are made while using the `{retain:true}` option with [wat
 
 ## TODO
 
-* Add 'catchup' (process whole file first) feature.
-
 * Maybe create a Cakefile (steal watchit's)
-
-* Turn into real Node (npm) module.
 
 * Make encoding an option?
 

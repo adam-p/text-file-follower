@@ -32,12 +32,14 @@ _ = require('underscore')
 
 default_options =
   persistent: true
+  catchup: false
 
 ###
 Watch for changes on `filename`.
 `options` is an optional object that looks like the following:
   {
     persistent: boolean, (default: true; ref: http://nodejs.org/docs/latest/api/fs.html#fs.watch)
+    catchup: boolean, (default: false; if true, file will be processed from start)
   }
 
 `listener` is an optional callback that takes three arguments: `(event, filename, value)`.
@@ -126,8 +128,12 @@ follow = (filename, options = {}, listener = null) ->
       follower.emit('error', filename, "not a file")
       return
 
-    prev_size = stats.size
     prev_mtime = stats.mtime
+
+    if options.catchup
+      read_lines_from_file(filename, prev_size, follower, (bytes_consumed) -> prev_size += bytes_consumed)
+    else
+      prev_size = stats.size
 
   # Function that gets called when a change is detected in the file.
   onchange = (filename) ->

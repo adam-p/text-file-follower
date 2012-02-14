@@ -681,3 +681,33 @@ describe 'text-file-follower', ->
 
                   f.close()
                   f.on 'close', -> done()
+
+    it "should 'catchup' on a non-empty file if told to do so", (done) ->
+      line_count = 0
+      next = null
+      received_lines = []
+
+      listener = (filename, line) ->
+        line_count++
+        expect(filename).to.equal('fixtures/a.test')
+        received_lines.push(line)
+        _.defer next
+
+      appendSync('fixtures/a.test', 'this will\nget read\n')
+
+      f = follow('fixtures/a.test', { catchup: true })
+      expect(f).to.be.ok
+      f.on 'error', -> throw new Error()
+
+      f.on 'line', listener
+
+      f.on 'success', ->
+        appendSync('fixtures/a.test', 'abc\n')
+
+      lines = ['this will', 'get read', 'abc']
+      next = ->
+        expect(received_lines.shift()).to.equal(lines.shift())
+
+        if lines.length == 0
+          f.on 'close', -> done()
+          f.close()

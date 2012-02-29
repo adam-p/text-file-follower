@@ -86,6 +86,10 @@ follow = (filename, options = {}, listener = null) ->
 
   # Create the Follower object that we'll ultimately return
   follower = new Follower(watcher, filename)
+
+  # Create the LineReader object that we'll use for reading lines
+  lineReader = new LineReader(follower)
+
   if listener? then follower.addListener('all', listener)
 
   prev_size = 0
@@ -100,11 +104,11 @@ follow = (filename, options = {}, listener = null) ->
   # we only want to emit it once.
   success_emitted = false
   watcher.on 'success', ->
-    if not success_emitted then follower.emit('success', filename)
+    if not success_emitted then follower.emit('success')
     success_emitted = true
 
   watcher.on 'failure', ->
-    follower.emit('error', filename, 'watchit failure')
+    follower.emit('error', 'watchit failure')
 
   watcher.on 'close', ->
     # It doesn't feel right to me that watchit emits the 'close' event synchronously
@@ -115,23 +119,24 @@ follow = (filename, options = {}, listener = null) ->
     # I'm not certain my feeling is right, but I see no harm in making it behave
     # this way.
     # So I'm going to make the propagation of it asynchronous:
-    _.defer -> follower.emit('close', filename)
+    _.defer -> follower.emit('close')
 
   fs.stat filename, (error, stats) ->
     if error?
       # Just return on file-not-found
       if error.code != 'ENOENT'
-        follower.emit('error', filename, error)
+        follower.emit('error', error)
       return
 
     if not stats.isFile()
-      follower.emit('error', filename, "not a file")
+      follower.emit('error', 'not a file')
       return
 
     prev_mtime = stats.mtime
 
+    # If the `catchup` option is true, start reading from the start of the file.
     if options.catchup
-      read_lines_from_file(filename, prev_size, follower, (bytes_consumed) -> prev_size += bytes_consumed)
+      lineReader.read(prev_size, (bytes_consumed) -> prev_size += bytes_consumed)
     else
       prev_size = stats.size
 
@@ -143,7 +148,7 @@ follow = (filename, options = {}, listener = null) ->
       if error?
         # Just return on file-not-found
         if error.code != 'ENOENT'
-          follower.emit('error', filename, error)
+          follower.emit('error', error)
         return
 
       if stats.size <= prev_size then return
@@ -154,7 +159,7 @@ follow = (filename, options = {}, listener = null) ->
 
       prev_mtime = stats.mtime
 
-      read_lines_from_file(filename, prev_size, follower, (bytes_consumed) -> prev_size += bytes_consumed)
+      lineReader.read(prev_size, (bytes_consumed) -> prev_size += bytes_consumed)
 
   # Hook up our change handler to the file watcher
   watcher.on('change', onchange)
@@ -173,76 +178,96 @@ and it can also be used to close the follower.
 class Follower extends events.EventEmitter
   constructor: (@watcher, @filename) ->
 
-  emit: (event, filename, etc...) ->
-    return if event is 'newListener'
-    super event, filename, etc...
-    super 'all', event, filename, etc...
-
   # Shut down the follower
   close: ->
     if @watcher?
       @watcher.close()
     else
-      _.defer -> emit 'close', @filename
+      _.defer -> emit 'close'
+
+  # Override EventEmitter.emit to support the `'all'` event (and to suppress
+  # `'newListener'` events). Borrowed from watchit's implmentation.
+  emit: (event, etc...) ->
+    return if event is 'newListener'
+    super event, @filename, etc...
+    super 'all', event, @filename, etc...
 
 
 ###
-Figure out if the text uses \n (unix) or \r\n (windows) newlines.
+This class is used to do the reading from the watched file. It emits lines via
+the `follower` constructor argument and keeps track of the number of bytes read
+via the `bytes_consumed_callback` argument to `read()`.
+An important function served by this class is to prevent multiple simultaneous
+reads on the same file (by the same follower).
 ###
-deduce_newline_value = (sample) ->
-  if sample.indexOf('\r\n') >= 0
-    return '\r\n'
-  return '\n'
+class LineReader
+  constructor: (@follower) ->
+    @_readstream = null
 
-###
-Splits the text into complete lines (must end with newline).
-Returns a tuple of [bytes_consumed, [line1, line2, ...]]
-###
-get_lines = (text) ->
-  newline = deduce_newline_value(text)
-  lines = text.split(newline)
-  # Exclude the last item in the array, since it will be an empty or incomplete line.
-  lines.pop()
+  # Reads lines from `@filename`, starting at `start_pos`. Emits read lines.
+  # `bytes_consumed_callback` may be called multiple times -- the argument is
+  # the number of bytes consumed from the file.
+  # This function ensures that reading can only be started on a file if there is
+  # currently no other reading taking place.
+  read: (start_pos, bytes_consumed_callback) ->
 
-  if lines.length == 0
-    return [0, []]
+    # Don't start reading a file that we're already reading.
+    if @_readstream? and @_readstream.readable
+      return
 
-  bytes_consumed = _.reduce(lines,
-                            (memo, line) -> return memo+line.length,
-                            0)
-  # Add back the newline characters
-  bytes_consumed += lines.length * newline.length
+    # Not every chunk of data we get will have complete lines, so we'll often
+    # have to keep a piece of the previous chunk to process the next.
+    accumulated_data = ''
 
-  return [bytes_consumed, lines]
+    @_readstream = fs.createReadStream(@follower.filename, { encoding: 'utf8', start: start_pos })
+
+    @_readstream.on 'error', (error) =>
+      # Swallow file-not-found; pass everything else up
+      if error.code != 'ENOENT'
+        @follower.emit('error', error)
+
+    @_readstream.on 'data', (new_data) =>
+      accumulated_data += new_data
+      [bytes_consumed, lines] = @_get_lines(accumulated_data)
+
+      # Move our data forward by the number of bytes we've really processed.
+      accumulated_data = accumulated_data[bytes_consumed..]
+
+      bytes_consumed_callback(bytes_consumed)
+
+      # Tell our listeners about the new lines
+      lines.forEach (line) =>
+        @follower.emit('line', line)
 
 
-# Reads lines from `filename`, starting at `start_pos`. Emits the lines via `follower`.
-# The callback may be called multiple times -- the argument is the number of bytes
-# consumed from the file.
-read_lines_from_file = (filename, start_pos, follower, bytes_consumed_callback) ->
+  ###
+  Figure out if the text uses \n (unix) or \r\n (windows) newlines.
+  ###
+  _deduce_newline_value: (sample) ->
+    if sample.indexOf('\r\n') >= 0
+      return '\r\n'
+    return '\n'
 
-  # Not every chunk of data we get will have complete lines, so we'll often
-  # have to keep a piece of the previous chunk to process the next.
-  accumulated_data = ''
+  ###
+  Splits the text into complete lines (must end with newline).
+  Returns a tuple of [bytes_consumed, [line1, line2, ...]]
+  ###
+  _get_lines: (text) ->
+    newline = @_deduce_newline_value(text)
+    lines = text.split(newline)
+    # Exclude the last item in the array, since it will be an empty or incomplete line.
+    lines.pop()
 
-  read_stream = fs.createReadStream(filename, { encoding: 'utf8', start: start_pos })
+    if lines.length == 0
+      return [0, []]
 
-  read_stream.on 'error', (error) ->
-    # Swallow file-not-found
-    if error.code != 'ENOENT'
-      follower.emit('error', filename, error)
+    bytes_consumed = _.reduce(lines,
+                              (memo, line) -> return memo+line.length,
+                              0)
+    # Add back the newline characters
+    bytes_consumed += lines.length * newline.length
 
-  read_stream.on 'data', (new_data) ->
-    accumulated_data += new_data
-    [bytes_consumed, lines] = get_lines(accumulated_data)
-
-    # Move our data forward by the number of bytes we've really processed.
-    accumulated_data = accumulated_data[bytes_consumed..]
-
-    bytes_consumed_callback(bytes_consumed)
-
-    # Tell our listeners about the new lines
-    lines.forEach((line) -> follower.emit('line', filename, line))
+    return [bytes_consumed, lines]
 
 
 # The main export is the sole real function
@@ -250,5 +275,4 @@ module.exports = follow
 
 # Also export the helpers for debug-testing
 module.exports.__get_debug_exports = ->
-    deduce_newline_value: deduce_newline_value
-    get_lines: get_lines
+    LineReader: LineReader

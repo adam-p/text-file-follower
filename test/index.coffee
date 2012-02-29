@@ -5,6 +5,11 @@ path = require('path')
 _ = require('underscore')
 Q = require('q')
 
+# src if we want to test the original CS, lib if we want to test the JS
+source_dir = '../src'
+
+follow = require(source_dir)
+follower_debug = follow.__get_debug_exports()
 
 
 long_delay = (func) -> setTimeout func, 100
@@ -16,85 +21,84 @@ appendSync = (filename, str) ->
   fs.writeSync(fd, str, len)
   fs.closeSync(fd)
 
-describe 'text-file-follower', ->
+appendAsync = (filename, str) ->
+  _.defer -> appendSync(filename, str)
 
-  before ->
-    try
-      fs.mkdirSync('fixtures')
 
-  after ->
-    fs.rmdirSync('fixtures')
+describe 'load-module', ->
+  it 'should load when required', ->
+    expect(follow).to.be.a('function')
 
-  describe '#load-module', ->
 
-    it 'should load when required', ->
-      expect(require('../lib')).to.be.ok
+describe 'LineReader', ->
 
-  follower_debug = require('../lib').__get_debug_exports()
+  describe '#_deduce_newline_value', ->
 
-  describe '#deduce_newline_value', ->
+    lineReader = new follower_debug.LineReader(null)
 
     it 'should be okay with an empty string', ->
       empty_string = ''
-      expect(follower_debug.deduce_newline_value(empty_string)).to.be.ok
+      expect(lineReader._deduce_newline_value(empty_string)).to.be.ok
 
     it 'should be correct with a string that is just a newline', ->
       newline = '\n'
-      expect(follower_debug.deduce_newline_value(newline)).to.equal(newline)
+      expect(lineReader._deduce_newline_value(newline)).to.equal(newline)
       newline = '\r\n'
-      expect(follower_debug.deduce_newline_value(newline)).to.equal(newline)
+      expect(lineReader._deduce_newline_value(newline)).to.equal(newline)
 
     it 'should default to unix-style if there are no newlines', ->
       no_newlines = 'foobar'
-      expect(follower_debug.deduce_newline_value(no_newlines)).to.equal('\n')
+      expect(lineReader._deduce_newline_value(no_newlines)).to.equal('\n')
 
     it 'should correctly deduce Windows-style newlines', ->
       windows_newlines = 'foo\r\nbar'
-      expect(follower_debug.deduce_newline_value(windows_newlines)).to.equal('\r\n')
+      expect(lineReader._deduce_newline_value(windows_newlines)).to.equal('\r\n')
 
     it 'should correctly deduce unix-style newlines', ->
       windows_newlines = 'foo\nbar'
-      expect(follower_debug.deduce_newline_value(windows_newlines)).to.equal('\n')
+      expect(lineReader._deduce_newline_value(windows_newlines)).to.equal('\n')
 
-  describe '#get_lines', ->
+  describe '#_get_lines', ->
+
+    lineReader = new follower_debug.LineReader(null)
 
     it 'should be okay with an empty string', ->
       empty_string = ''
-      expect(follower_debug.get_lines(empty_string)).to.be.ok
+      expect(lineReader._get_lines(empty_string)).to.be.ok
 
     it "should return zero and an empty array if there is no newline", ->
       no_newlines = 'foobar'
-      expect(follower_debug.get_lines(no_newlines)).to.eql([0, []])
+      expect(lineReader._get_lines(no_newlines)).to.eql([0, []])
 
     it "should correctly split empty lines", ->
       only_newlines = '\n'
-      expect(follower_debug.get_lines(only_newlines)).to.eql([only_newlines.length, ['']])
+      expect(lineReader._get_lines(only_newlines)).to.eql([only_newlines.length, ['']])
 
       only_newlines = '\r\n'
-      expect(follower_debug.get_lines(only_newlines)).to.eql([only_newlines.length, ['']])
+      expect(lineReader._get_lines(only_newlines)).to.eql([only_newlines.length, ['']])
 
       only_newlines = '\n\n'
-      expect(follower_debug.get_lines(only_newlines)).to.eql([only_newlines.length, ['', '']])
+      expect(lineReader._get_lines(only_newlines)).to.eql([only_newlines.length, ['', '']])
 
       only_newlines = '\r\n\r\n'
-      expect(follower_debug.get_lines(only_newlines)).to.eql([only_newlines.length, ['', '']])
+      expect(lineReader._get_lines(only_newlines)).to.eql([only_newlines.length, ['', '']])
 
     it "should correctly split input that ends with a newline", ->
 
       newline_end = "foobar\n"
-      result = follower_debug.get_lines(newline_end)
+      result = lineReader._get_lines(newline_end)
       expect(result).to.eql([newline_end.length, ['foobar']])
 
       newline_end = "foobar\r\n"
-      result = follower_debug.get_lines(newline_end)
+      result = lineReader._get_lines(newline_end)
       expect(result).to.eql([newline_end.length, ['foobar']])
 
       newline_end = "foo\nbar\n"
-      result = follower_debug.get_lines(newline_end)
+      result = lineReader._get_lines(newline_end)
       expect(result).to.eql([newline_end.length, ['foo', 'bar']])
 
       newline_end = "foo\r\nbar\r\n"
-      result = follower_debug.get_lines(newline_end)
+      result = lineReader._get_lines(newline_end)
       expect(result).to.eql([newline_end.length, ['foo', 'bar']])
 
     it "should correctly split input that does not end with a newline", ->
@@ -103,50 +107,172 @@ describe 'text-file-follower', ->
       # doesn't end with a newline.
 
       not_newline_end = "foobar"
-      result = follower_debug.get_lines(not_newline_end)
+      result = lineReader._get_lines(not_newline_end)
       expect(result).to.eql([0, []])
 
       not_newline_end = "foo\nbar"
-      result = follower_debug.get_lines(not_newline_end)
+      result = lineReader._get_lines(not_newline_end)
       expect(result).to.eql(['foo\n'.length, ['foo']])
 
       not_newline_end = "foo\r\nbar"
-      result = follower_debug.get_lines(not_newline_end)
+      result = lineReader._get_lines(not_newline_end)
       expect(result).to.eql(['foo\r\n'.length, ['foo']])
 
       not_newline_end = "foo\nbar\nasdf"
-      result = follower_debug.get_lines(not_newline_end)
+      result = lineReader._get_lines(not_newline_end)
       expect(result).to.eql(['foo\nbar\n'.length, ['foo', 'bar']])
 
       not_newline_end = "foo\r\nbar\r\nasdf"
-      result = follower_debug.get_lines(not_newline_end)
+      result = lineReader._get_lines(not_newline_end)
       expect(result).to.eql(['foo\r\nbar\r\n'.length, ['foo', 'bar']])
 
+  describe '#read', ->
+
+  before ->
+    # Create the test directories and files
+    try
+      fs.mkdirSync('fixtures')
+    fs.writeFileSync('fixtures/a.test', '')
+
+  beforeEach ->
+    # Make the test files zero-size again
+    fs.writeFileSync('fixtures/a.test', '')
+
+  after ->
+    fixture_filenames = fs.readdirSync('fixtures')
+    for filename in fixture_filenames
+      filename = path.join('fixtures', filename)
+      if fs.statSync(filename).isDirectory()
+        fs.rmdirSync(filename)
+      else
+        fs.unlinkSync(filename)
+
+    it 'should be okay with an empty file', (done) ->
+      follower_mock =
+        filename: 'fixtures/a.test'
+
+      lr = new follower_debug.LineReader(follower_mock)
+      lr.read(0, -> throw new Error('should be no bytes read'))
+
+      long_delay done
+
+    it 'should read from the start of a non-empty file', (done) ->
+      lines = ['this will', 'get read']
+      line_index = 0
+      lines_defer = Q.defer()
+
+      follower_mock =
+        filename: 'fixtures/a.test'
+        emit: (type, value) ->
+          expect(type).to.equal('line')
+          expect(value).to.equal(lines[line_index++])
+          if line_index == lines.length
+            lines_defer.resolve()
+
+      bytes_read = 0
+      bytes_read_defer = Q.defer()
+      bytes_consumed_callback = (num_bytes) ->
+        bytes_read += num_bytes
+        if bytes_read == (lines.join('\n')+'\n').length
+          bytes_read_defer.resolve()
+
+      appendSync('fixtures/a.test', lines.join('\n')+'\nno newline')
+
+      lr = new follower_debug.LineReader(follower_mock)
+      lr.read(0, bytes_consumed_callback)
+
+      Q.all([lines_defer.promise, bytes_read_defer.promise]).then ->
+        done()
+
+    it 'should read from part way through a non-empty file', (done) ->
+      lines = ['this will not get read', 'but this will', 'get read']
+      line_index = 1
+      lines_defer = Q.defer()
+
+      follower_mock =
+        filename: 'fixtures/a.test'
+        emit: (type, value) ->
+          expect(type).to.equal('line')
+          expect(value).to.equal(lines[line_index++])
+          if line_index == lines.length
+            lines_defer.resolve()
+
+      bytes_read = 0
+      bytes_read_defer = Q.defer()
+      bytes_consumed_callback = (num_bytes) ->
+        bytes_read += num_bytes
+        if bytes_read == (_.rest(lines).join('\n')+'\n').length
+          bytes_read_defer.resolve()
+
+      appendSync('fixtures/a.test', lines.join('\n')+'\nno newline')
+
+      lr = new follower_debug.LineReader(follower_mock)
+      lr.read(lines[0].length+1, bytes_consumed_callback)
+
+      Q.all([lines_defer.promise, bytes_read_defer.promise]).then ->
+        done()
+
+    it 'should prevent multiple simultaneous reads', (done) ->
+      lines = ['this will', 'get read']
+      line_index = 0
+      lines_defer = Q.defer()
+
+      follower_mock =
+        filename: 'fixtures/a.test'
+        emit: (type, value) ->
+          expect(type).to.equal('line')
+          expect(value).to.equal(lines[line_index++])
+          if line_index == lines.length
+            lines_defer.resolve()
+
+      bytes_read = 0
+      bytes_read_defer = Q.defer()
+      bytes_consumed_callback = (num_bytes) ->
+        bytes_read += num_bytes
+        if bytes_read == (lines.join('\n')+'\n').length
+          bytes_read_defer.resolve()
+
+      appendSync('fixtures/a.test', lines.join('\n')+'\nno newline')
+
+      lr = new follower_debug.LineReader(follower_mock)
+      lr.read(0, bytes_consumed_callback)
+
+      # Start a second read immediately.
+      # If this triggers any callbacks, something above will fail a check
+      lr.read(0, bytes_consumed_callback)
+
+      Q.all([lines_defer.promise, bytes_read_defer.promise]).then ->
+        done()
+
+
+describe 'text-file-follower', ->
+
+  before ->
+    # Create the test directories and files
+    try
+      fs.mkdirSync('fixtures')
+    fs.mkdirSync('fixtures/testdir')
+    fs.writeFileSync('fixtures/a.test', '')
+    fs.writeFileSync('fixtures/b.test', '')
+    fs.writeFileSync('fixtures/c.test', '')
+
+  beforeEach ->
+    # Make the test files zero-size again
+    fs.writeFileSync('fixtures/a.test', '')
+    fs.writeFileSync('fixtures/b.test', '')
+    fs.writeFileSync('fixtures/c.test', '')
+
+  after ->
+    fixture_filenames = fs.readdirSync('fixtures')
+    for filename in fixture_filenames
+      filename = path.join('fixtures', filename)
+      if fs.statSync(filename).isDirectory()
+        fs.rmdirSync(filename)
+      else
+        fs.unlinkSync(filename)
+    long_delay -> fs.rmdirSync('fixtures')
+
   describe '#follow', ->
-
-    before ->
-      try
-        fs.mkdirSync('fixtures/testdir')
-      fs.writeFileSync('fixtures/a.test', '')
-      fs.writeFileSync('fixtures/b.test', '')
-      fs.writeFileSync('fixtures/c.test', '')
-
-    beforeEach ->
-      # Make it zero-size again
-      fs.writeFileSync('fixtures/a.test', '')
-      fs.writeFileSync('fixtures/b.test', '')
-      fs.writeFileSync('fixtures/c.test', '')
-
-    after ->
-      fixture_filenames = fs.readdirSync('fixtures')
-      for filename in fixture_filenames
-        filename = path.join('fixtures', filename)
-        if fs.statSync(filename).isDirectory()
-          fs.rmdirSync(filename)
-        else
-          fs.unlinkSync(filename)
-
-    follow = require('../lib')
 
     it "should reject bad arguments", ->
       # no args
@@ -188,7 +314,8 @@ describe 'text-file-follower', ->
 
       f = follow('fixtures/a.test')
       expect(f).to.be.ok
-      f.on 'error', -> throw new Error()
+      f.on 'error', (filename, error) ->
+        throw new Error(error)
 
       f.on 'line', (filename, line) ->
         line_count++
@@ -202,18 +329,18 @@ describe 'text-file-follower', ->
         long_delay ->
           expect(line_count).to.equal(0)
 
-          appendSync('fixtures/a.test', '\n')
+          appendAsync('fixtures/a.test', '\n')
           next = ->
             expect(line_count).to.equal(1)
             expect(received_lines.shift()).to.equal('abc')
 
-            appendSync('fixtures/a.test', 'def\n')
+            appendAsync('fixtures/a.test', 'def\n')
             next = ->
               expect(line_count).to.equal(2)
               expect(received_lines.shift()).to.equal('def')
 
               call_count = 0
-              appendSync('fixtures/a.test', 'ghi\njkl\n')
+              appendAsync('fixtures/a.test', 'ghi\njkl\n')
               next = ->
                 # This will get called twice.
                 if call_count == 0
@@ -254,13 +381,13 @@ describe 'text-file-follower', ->
       next = ->
 
         expected_event = 'line'
-        appendSync('fixtures/a.test', 'abc\n')
+        appendAsync('fixtures/a.test', 'abc\n')
         next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
           expected_event = 'line'
-          appendSync('fixtures/a.test', 'def\n')
+          appendAsync('fixtures/a.test', 'def\n')
           next = ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
@@ -298,13 +425,13 @@ describe 'text-file-follower', ->
       next = ->
 
         expected_event = 'line'
-        appendSync('fixtures/a.test', 'abc\n')
+        appendAsync('fixtures/a.test', 'abc\n')
         next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
           expected_event = 'line'
-          appendSync('fixtures/a.test', 'def\n')
+          appendAsync('fixtures/a.test', 'def\n')
           next = ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
@@ -334,12 +461,12 @@ describe 'text-file-follower', ->
       f.on 'line', listener
 
       f.on 'success', ->
-        appendSync('fixtures/a.test', 'abc\n')
+        appendAsync('fixtures/a.test', 'abc\n')
         next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
 
-          appendSync('fixtures/a.test', 'def\n')
+          appendAsync('fixtures/a.test', 'def\n')
           next = ->
             expect(line_count).to.equal(2)
             expect(received_lines.shift()).to.equal('def')
@@ -375,10 +502,10 @@ describe 'text-file-follower', ->
         f2_line_deferred.resolve()
 
       f1.on 'success', ->
-        appendSync(f1_filename, f1_line+'\n')
+        appendAsync(f1_filename, f1_line+'\n')
 
       f2.on 'success', ->
-        appendSync(f2_filename, f2_line+'\n')
+        appendAsync(f2_filename, f2_line+'\n')
 
       Q.all([f1_line_deferred.promise, f2_line_deferred.promise]).then ->
         expect(line_count).to.equal(2)
@@ -427,7 +554,7 @@ describe 'text-file-follower', ->
       f2.on 'success', f2_success_deferred.resolve
 
       Q.all([f1_success_deferred.promise, f2_success_deferred.promise]).then ->
-        appendSync(curr_filename, curr_line+'\n')
+        appendAsync(curr_filename, curr_line+'\n')
 
       f1_close_deferred = Q.defer()
       f1.on 'close', f1_close_deferred.resolve
@@ -464,7 +591,7 @@ describe 'text-file-follower', ->
       f.on 'line', listener
 
       f.on 'success', ->
-        appendSync(curr_filename, 'abc\n')
+        appendAsync(curr_filename, 'abc\n')
         next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('abc')
@@ -483,7 +610,7 @@ describe 'text-file-follower', ->
 
             f.on 'success', ->
 
-              appendSync(curr_filename, 'def\n')
+              appendAsync(curr_filename, 'def\n')
               next = ->
                 expect(line_count).to.equal(1)
                 expect(received_lines.shift()).to.equal('def')
@@ -539,7 +666,7 @@ describe 'text-file-follower', ->
         expect(success_listener_called).to.equal(false)
         success_listener_called = true
 
-        appendSync(curr_filename, 'qwe\n')
+        appendAsync(curr_filename, 'qwe\n')
         next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('qwe')
@@ -554,8 +681,9 @@ describe 'text-file-follower', ->
               expect(fs.statSync(curr_filename).size).to.equal(0)
 
               long_delay ->
-                appendSync(curr_filename, 'rty\n')
-                expect(fs.statSync(curr_filename).size).to.equal(4)
+                _.defer ->
+                  appendSync(curr_filename, 'rty\n')
+                  expect(fs.statSync(curr_filename).size).to.equal(4)
 
                 next = ->
                   expect(line_count).to.equal(2)
@@ -609,13 +737,13 @@ describe 'text-file-follower', ->
             expect(success_listener_called).to.equal(false)
             success_listener_called = true
 
-            appendSync(curr_filename, 'abc\n')
+            appendAsync(curr_filename, 'abc\n')
             expected_event = 'line'
             next = ->
               expect(line_count).to.equal(1)
               expect(received_lines.shift()).to.equal('abc')
 
-              appendSync(curr_filename, 'def\n')
+              appendAsync(curr_filename, 'def\n')
               expected_event = 'line'
               next = ->
                 expect(line_count).to.equal(2)
@@ -657,7 +785,7 @@ describe 'text-file-follower', ->
         expect(success_listener_called).to.equal(false)
         success_listener_called = true
 
-        appendSync(curr_filename, 'qwe\n')
+        appendAsync(curr_filename, 'qwe\n')
         next = ->
           expect(line_count).to.equal(1)
           expect(received_lines.shift()).to.equal('qwe')
@@ -672,8 +800,9 @@ describe 'text-file-follower', ->
               expect(fs.statSync(curr_filename).size).to.equal(0)
 
               long_delay ->
-                appendSync(curr_filename, 'rty\n')
-                expect(fs.statSync(curr_filename).size).to.equal(4)
+                _.defer ->
+                  appendSync(curr_filename, 'rty\n')
+                  expect(fs.statSync(curr_filename).size).to.equal(4)
 
                 next = ->
                   expect(line_count).to.equal(2)
@@ -682,7 +811,7 @@ describe 'text-file-follower', ->
                   f.close()
                   f.on 'close', -> done()
 
-    it "should 'catchup' on a non-empty file if told to do so", (done) ->
+    it "should 'catchup' a non-empty file", (done) ->
       line_count = 0
       next = null
       received_lines = []
@@ -702,7 +831,7 @@ describe 'text-file-follower', ->
       f.on 'line', listener
 
       f.on 'success', ->
-        appendSync('fixtures/a.test', 'abc\n')
+        appendAsync('fixtures/a.test', 'abc\n')
 
       lines = ['this will', 'get read', 'abc']
       next = ->

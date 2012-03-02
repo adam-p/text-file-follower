@@ -128,24 +128,24 @@ describe 'LineReader', ->
 
   describe '#read', ->
 
-  before ->
-    # Create the test directories and files
-    try
-      fs.mkdirSync('fixtures')
-    fs.writeFileSync('fixtures/a.test', '')
+    before ->
+      # Create the test directories and files
+      try
+        fs.mkdirSync('fixtures')
+      fs.writeFileSync('fixtures/a.test', '')
 
-  beforeEach ->
-    # Make the test files zero-size again
-    fs.writeFileSync('fixtures/a.test', '')
+    beforeEach ->
+      # Make the test files zero-size again
+      fs.writeFileSync('fixtures/a.test', '')
 
-  after ->
-    fixture_filenames = fs.readdirSync('fixtures')
-    for filename in fixture_filenames
-      filename = path.join('fixtures', filename)
-      if fs.statSync(filename).isDirectory()
-        fs.rmdirSync(filename)
-      else
-        fs.unlinkSync(filename)
+    after ->
+      fixture_filenames = fs.readdirSync('fixtures')
+      for filename in fixture_filenames
+        filename = path.join('fixtures', filename)
+        if fs.statSync(filename).isDirectory()
+          fs.rmdirSync(filename)
+        else
+          fs.unlinkSync(filename)
 
     it 'should be okay with an empty file', (done) ->
       follower_mock =

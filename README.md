@@ -5,11 +5,15 @@ A Node.js module for getting each new last line of a text file as it appears. Th
 
 `text-file-follower` is written in CoffeeScript, but a compiled JavaScript can be found in the `lib` directory.
 
+## Installation
+
+Install with `npm`:
+
+    > npm install text-file-follower
+
 ## Usage
 
-Some day installation will be via `npm`. For now you'll have to put the code where you want it (either lib/index.js or src/index.coffee).
-
-A simple usage example:
+A simple example:
 
 ```javascript
 var follow = require('text-file-follower');

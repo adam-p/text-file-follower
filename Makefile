@@ -4,8 +4,8 @@ COFFEE := coffee
 MOCHA := mocha
 
 ifneq ($(IS_CYGWIN),)
-	COFFEE := ../node_modules/.bin/coffee.cmd
-	MOCHA := ../node_modules/.bin/mocha.cmd
+	COFFEE := $(shell cygpath "$(APPDATA)")/npm/coffee.cmd
+	MOCHA := $(shell cygpath "$(APPDATA)")/npm/mocha.cmd
 endif
 
 

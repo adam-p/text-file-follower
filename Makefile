@@ -13,5 +13,5 @@ lib/%.js: src/%.coffee
 	$(COFFEE) -c -o lib src/*.coffee
 
 test: lib/*.js
-	$(MOCHA) --bail --require chai --reporter list test/*.coffee
+	$(MOCHA) --bail --require chai --require coffee-script --reporter list test/*.coffee
 .PHONY: test
